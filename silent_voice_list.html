@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="theme-color" content="#000000">
+    <title>silent list</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --fg: #00ff9f;
+            --dim: #00aa6b;
+            --accent: #ffaa00;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 16px;
+            line-height: 1.4;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .container {
+            max-width: 100%;
+            padding: 12px 16px 80px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #222;
+        }
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        .status {
+            font-size: 11px;
+            padding: 2px 8px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 3px;
+        }
+        .mode {
+            font-size: 12px;
+            padding: 4px 10px;
+            background: #0a2a1a;
+            border: 1px solid var(--dim);
+            color: var(--dim);
+            margin: 8px 0;
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+        .mode.reconcile {
+            background: #2a1a0a;
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .sync-box {
+            background: #080808;
+            border: 1px solid #222;
+            padding: 10px;
+            margin: 8px 0;
+            font-size: 12px;
+        }
+        .sync-box label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            margin-bottom: 6px;
+        }
+        .url-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .url-input {
+            flex: 1;
+            background: #111;
+            border: 1px solid #333;
+            color: var(--fg);
+            padding: 6px 8px;
+            font-family: inherit;
+            font-size: 12px;
+        }
+        .url-input:focus {
+            outline: none;
+            border-color: var(--dim);
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 12px 0;
+        }
+        button {
+            background: #111;
+            color: var(--fg);
+            border: 1px solid #444;
+            padding: 12px 8px;
+            font-family: inherit;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            touch-action: manipulation;
+        }
+        button:active {
+            background: #222;
+            transform: scale(0.985);
+        }
+        button.primary {
+            background: #003322;
+            border-color: var(--dim);
+            grid-column: span 2;
+            padding: 16px;
+            font-size: 15px;
+        }
+        button.danger {
+            color: #ff6666;
+            border-color: #442222;
+        }
+        .list-container {
+            background: #0a0a0a;
+            border: 1px solid #222;
+            min-height: 180px;
+            max-height: 320px;
+            overflow-y: auto;
+            margin: 12px 0;
+            padding: 4px 0;
+        }
+        .list-item {
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 15px;
+        }
+        .list-item:last-child {
+            border-bottom: none;
+        }
+        .list-item span {
+            flex: 1;
+            word-break: break-word;
+        }
+        .list-item button {
+            background: transparent;
+            border: none;
+            color: #ff4444;
+            font-size: 18px;
+            padding: 4px 10px;
+            margin: 0;
+            min-width: 36px;
+        }
+        .empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: #444;
+            font-size: 13px;
+        }
+        .instructions {
+            font-size: 11px;
+            color: #555;
+            line-height: 1.5;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #222;
+        }
+        .count {
+            font-size: 11px;
+            color: #555;
+            text-align: right;
+            margin-top: 4px;
+        }
+        .log {
+            font-size: 11px;
+            color: var(--accent);
+            min-height: 24px;
+            margin-top: 8px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SILENT LIST</h1>
+            <div id="status" class="status">IDLE</div>
+        </header>
+
+        <div id="mode" class="mode">LISTENING • dead air</div>
+
+        <div class="sync-box">
+            <label>
+                <input type="checkbox" id="serverSync" style="accent-color:#00ff9f; width:14px; height:14px;">
+                <span>Enable Server Sync</span>
+            </label>
+            <div class="url-row">
+                <input type="text" id="serverUrlInput" class="url-input" value="http://172.20.10.4:28430/putmsg" placeholder="http://ip:port/endpoint">
+                <button id="testSendBtn" style="padding: 6px 12px; font-size: 12px;">Test Send</button>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" class="primary">START LISTENING</button>
+            <button id="reconcileBtn">RECONCILE MODE</button>
+            <button id="readBtn">READ LIST</button>
+            <button id="clearBtn" class="danger">CLEAR ALL</button>
+        </div>
+
+        <div id="listContainer" class="list-container">
+            <div class="empty">empty — speak items naturally</div>
+        </div>
+        <div id="count" class="count">0 items</div>
+
+        <div class="log" id="log"></div>
+
+        <div class="instructions">
+            <strong>how it works:</strong><br>
+            • tap start → speak items (one or a few at a time)<br>
+            • soft beep confirms each addition (no talking back)<br>
+            • say “read list” or tap to hear it spoken<br>
+            • say “reconcile” → switch mode, then speak items you think you need<br>
+            • it answers yes/no (or yes + item) if captured<br>
+            • say “done” or “clear list” for other commands<br>
+            • use edit box above to tweak URL/port and test instantly with "Test Send"<br>
+            • list saves automatically in this browser
+        </div>
+    </div>
+
+    <script>
+        // === CONFIG ===
+        const BEEP_FREQ = 880;      // pleasant A5
+        const BEEP_DURATION = 70;   // ms
+        const BEEP_VOLUME = 0.06;   // very soft for dead air
+
+        // === STATE ===
+        let list = [];
+        let mode = 'listen'; // 'listen' | 'reconcile'
+        let isListening = false;
+        let recognition = null;
+        let audioCtx = null;
+        let audioUnlocked = false;
+        let lastTranscript = '';
+        let serverSyncEnabled = false;
+        let serverEndpoint = 'http://172.20.10.4:28430/putmsg';
+
+        // === PERSISTENCE ===
+        function loadList() {
+            try {
+                const saved = localStorage.getItem('silentVoiceList');
+                if (saved) list = JSON.parse(saved);
+            } catch (e) {}
+        }
+
+        function loadPreferences() {
+            try {
+                const pref = localStorage.getItem('serverSyncEnabled');
+                serverSyncEnabled = (pref === 'true');
+                const savedUrl = localStorage.getItem('serverEndpoint');
+                if (savedUrl) serverEndpoint = savedUrl;
+            } catch (e) {}
+        }
+
+        function savePreferences() {
+            try {
+                localStorage.setItem('serverSyncEnabled', serverSyncEnabled ? 'true' : 'false');
+                localStorage.setItem('serverEndpoint', serverEndpoint);
+            } catch (e) {}
+        }
+
+        function saveList() {
+            try {
+                localStorage.setItem('silentVoiceList', JSON.stringify(list));
+            } catch (e) {}
+            updateDisplay();
+        }
+
+        // === UI ===
+        function updateDisplay() {
+            const container = document.getElementById('listContainer');
+            const countEl = document.getElementById('count');
+            
+            container.innerHTML = '';
+            
+            if (list.length === 0) {
+                container.innerHTML = '<div class="empty">empty — speak items naturally</div>';
+                countEl.textContent = '0 items';
+                return;
+            }
+            
+            list.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.innerHTML = `
+                    <span>${escapeHtml(item)}</span>
+                    <button aria-label="remove ${item}">×</button>
+                `;
+                div.querySelector('button').onclick = (e) => {
+                    e.stopPropagation();
+                    list.splice(idx, 1);
+                    saveList();
+                };
+                container.appendChild(div);
+            });
+            
+            countEl.textContent = `${list.length} item${list.length === 1 ? '' : 's'}`;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        }
+
+        function setStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+
+        function setModeUI(newMode) {
+            mode = newMode;
+            const el = document.getElementById('mode');
+            if (newMode === 'reconcile') {
+                el.textContent = 'RECONCILE • speak items to verify';
+                el.classList.add('reconcile');
+            } else {
+                el.textContent = 'LISTENING • dead air';
+                el.classList.remove('reconcile');
+            }
+        }
+
+        function log(msg) {
+            const el = document.getElementById('log');
+            el.textContent = msg;
+        }
+
+        // === AUDIO: SOFT BEEP (dead air confirmation) ===
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx.resume().then(() => {
+                    audioUnlocked = true;
+                }).catch(() => {});
+            } catch (e) {}
+        }
+
+        function playSoftBeep() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                const filter = audioCtx.createBiquadFilter();
+
+                osc.type = 'sine';
+                osc.frequency.value = BEEP_FREQ;
+
+                filter.type = 'lowpass';
+                filter.frequency.value = 1200;
+
+                gain.gain.value = BEEP_VOLUME;
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+
+                const now = audioCtx.currentTime;
+                gain.gain.setValueAtTime(BEEP_VOLUME, now);
+                gain.gain.linearRampToValueAtTime(0.0001, now + (BEEP_DURATION / 1000) + 0.06);
+
+                setTimeout(() => {
+                    try { osc.stop(); } catch (_) {}
+                }, BEEP_DURATION + 120);
+            } catch (e) {}
+        }
+
+        // === SPEECH SYNTHESIS ===
+        function speak(text, rate = 0.95, volume = 0.75) {
+            try {
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.rate = rate;
+                utter.volume = volume;
+                utter.pitch = 1.0;
+                window.speechSynthesis.speak(utter);
+            } catch (e) {}
+        }
+
+        function readListAloud() {
+            if (list.length === 0) {
+                speak('List is empty.');
+                return;
+            }
+            const text = list.length === 1 
+                ? `One item: ${list[0]}` 
+                : `The list has ${list.length} items: ${list.join(', ')}`;
+            speak(text, 0.92, 0.7);
+            log('reading list');
+        }
+
+        // === NETWORK SYNC ===
+        function sendToServer(msgText) {
+            const inputEl = document.getElementById('serverUrlInput');
+            if (inputEl) {
+                serverEndpoint = inputEl.value.trim();
+                savePreferences();
+            }
+            if (!serverEndpoint) return;
+
+            const separator = serverEndpoint.includes('?') ? '&' : '?';
+            const url = `${serverEndpoint}${separator}msg=${encodeURIComponent(msgText)}`;
+
+            // fire-and-forget fetch with mode no-cors for local IP curl debugging
+            fetch(url, { method: 'GET', mode: 'no-cors' })
+                .then(() => {
+                    log(`sent via curl: ${url}`);
+                })
+                .catch((err) => {
+                    log(`send error: ${err.message} (${url})`);
+                });
+        }
+
+        // === LIST LOGIC ===
+        function cleanItem(text) {
+            let t = text.trim();
+            t = t.replace(/^(add|buy|get|put|need|grab|pick up|and|also|plus)\s+/i, '');
+            t = t.replace(/\s+(please|thanks|thank you)$/i, '');
+            t = t.trim();
+            if (t.length < 2) return null;
+            return t;
+        }
+
+        function addItem(rawText) {
+            const cleaned = cleanItem(rawText);
+            if (!cleaned) return false;
+
+            const lower = cleaned.toLowerCase();
+            const exists = list.some(it => it.toLowerCase() === lower);
+            if (exists) {
+                log('already on list');
+                playSoftBeep();
+                return false;
+            }
+
+            list.push(cleaned);
+            saveList();
+            playSoftBeep();
+            log(`added: ${cleaned}`);
+
+            const syncBox = document.getElementById('serverSync');
+            if (serverSyncEnabled || (syncBox && syncBox.checked)) {
+                sendToServer(cleaned);
+            }
+
+            return true;
+        }
+
+        function checkInList(rawText) {
+            const cleaned = cleanItem(rawText);
+            if (!cleaned) {
+                speak('say an item');
+                return;
+            }
+
+            const lower = cleaned.toLowerCase();
+            let foundItem = null;
+
+            for (const item of list) {
+                const itemLower = item.toLowerCase();
+                if (itemLower === lower || itemLower.includes(lower) || lower.includes(itemLower)) {
+                    foundItem = item;
+                    break;
+                }
+            }
+
+            if (foundItem) {
+                speak(`Yes, ${foundItem}`, 1.0, 0.65);
+                log(`✓ ${foundItem}`);
+            } else {
+                speak('No', 1.05, 0.6);
+                log(`✗ not found`);
+            }
+        }
+
+        // === COMMANDS ===
+        function handleVoiceCommand(text) {
+            const lower = text.toLowerCase().trim();
+
+            if (lower.includes('read list') || lower.includes('read the list') || 
+                lower.includes('what') && lower.includes('list') || lower.includes('speak')) {
+                readListAloud();
+                return true;
+            }
+
+            if (lower.includes('reconcile') || lower.includes('reconcile mode') || lower.includes('verify')) {
+                if (mode === 'listen') {
+                    enterReconcileMode();
+                } else {
+                    exitReconcileMode();
+                }
+                return true;
+            }
+
+            if (lower.includes('clear list') || lower.includes('clear all') || lower.includes('reset list')) {
+                list = [];
+                saveList();
+                playSoftBeep();
+                speak('List cleared.');
+                log('list cleared');
+                return true;
+            }
+
+            if (lower.includes('new list') || lower.includes('start over') || lower.includes('fresh list')) {
+                list = [];
+                saveList();
+                playSoftBeep();
+                log('new list started');
+                return true;
+            }
+
+            if ((lower.includes('done') || lower.includes('finish') || lower.includes('stop')) && mode === 'reconcile') {
+                exitReconcileMode();
+                return true;
+            }
+
+            return false;
+        }
+
+        // === RECOGNITION ===
+        function startRecognition() {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) {
+                alert('Speech Recognition not supported in this browser. Use Safari on iPhone or Chrome.');
+                return;
+            }
+
+            const rec = new SpeechRec();
+            rec.continuous = true;
+            rec.interimResults = false;
+            rec.lang = 'en-US';
+            rec.maxAlternatives = 1;
+
+            rec.onresult = (event) => {
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        const transcript = event.results[i][0].transcript.trim();
+                        if (!transcript || transcript === lastTranscript) continue;
+                        lastTranscript = transcript;
+
+                        if (handleVoiceCommand(transcript)) {
+                            // handled
+                        } else if (mode === 'listen') {
+                            addItem(transcript);
+                        } else if (mode === 'reconcile') {
+                            checkInList(transcript);
+                        }
+                    }
+                }
+            };
+
+            rec.onerror = (event) => {
+                console.warn('Speech error:', event.error);
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    setStatus('MIC DENIED — allow permissions');
+                    isListening = false;
+                    document.getElementById('startBtn').textContent = 'START LISTENING';
+                    recognition = null;
+                }
+            };
+
+            rec.onend = () => {
+                if (isListening) {
+                    setTimeout(() => {
+                        if (isListening) {
+                            try { startRecognition(); } catch (e) {}
+                        }
+                    }, 220);
+                } else {
+                    recognition = null;
+                }
+            };
+
+            try {
+                rec.start();
+                recognition = rec;
+                isListening = true;
+                document.getElementById('startBtn').textContent = 'STOP LISTENING';
+                setStatus('LISTENING (dead air)');
+                log('listening — speak naturally');
+            } catch (e) {
+                setStatus('START FAILED');
+                recognition = null;
+                isListening = false;
+            }
+        }
+
+        function stopRecognition() {
+            if (recognition) {
+                try { recognition.stop(); } catch (_) {}
+                recognition = null;
+            }
+            isListening = false;
+            document.getElementById('startBtn').textContent = 'START LISTENING';
+            setStatus('PAUSED');
+            log('');
+        }
+
+        function toggleListening() {
+            unlockAudio();
+            if (!isListening) {
+                startRecognition();
+            } else {
+                stopRecognition();
+            }
+        }
+
+        function enterReconcileMode() {
+            setModeUI('reconcile');
+            if (!isListening) {
+                if (document.getElementById('startBtn').textContent.includes('START')) {
+                    toggleListening();
+                }
+            }
+            speak('Reconcile mode. Say items from your list.');
+            log('reconcile active');
+        }
+
+        function exitReconcileMode() {
+            setModeUI('listen');
+            speak('Back to listening.');
+            log('listening mode');
+        }
+
+        // === INIT ===
+        function init() {
+            loadList();
+            loadPreferences();
+            updateDisplay();
+
+            const syncBox = document.getElementById('serverSync');
+            const urlInput = document.getElementById('serverUrlInput');
+            
+            if (syncBox) syncBox.checked = serverSyncEnabled;
+            if (urlInput) urlInput.value = serverEndpoint;
+
+            if (syncBox) {
+                syncBox.onchange = () => {
+                    serverSyncEnabled = syncBox.checked;
+                    savePreferences();
+                    if (serverSyncEnabled) log('server sync enabled');
+                };
+            }
+
+            if (urlInput) {
+                urlInput.oninput = () => {
+                    serverEndpoint = urlInput.value.trim();
+                    savePreferences();
+                };
+            }
+
+            document.getElementById('testSendBtn').onclick = () => {
+                unlockAudio();
+                sendToServer('test-ping-message');
+                playSoftBeep();
+            };
+
+            document.getElementById('startBtn').onclick = toggleListening;
+            document.getElementById('reconcileBtn').onclick = () => {
+                if (mode === 'listen') enterReconcileMode();
+                else exitReconcileMode();
+            };
+            document.getElementById('readBtn').onclick = () => {
+                unlockAudio();
+                readListAloud();
+            };
+            document.getElementById('clearBtn').onclick = () => {
+                if (list.length === 0) return;
+                if (confirm('Clear the entire list?')) {
+                    list = [];
+                    saveList();
+                    playSoftBeep();
+                    log('cleared');
+                }
+            };
+
+            setStatus('READY');
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
