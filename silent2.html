@@ -1,1 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="theme-color" content="#000000">
+  <title>silent list — transcriber</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --fg: #00ff9f;
+      --dim: #00aa6b;
+      --accent: #ffaa00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 16px;
+      line-height: 1.4;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .container {
+      max-width: 100%;
+      padding: 12px 16px 80px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #222;
+    }
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .status {
+      font-size: 11px;
+      padding: 2px 8px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 3px;
+    }
+    .mode {
+      font-size: 12px;
+      padding: 4px 10px;
+      background: #0a2a1a;
+      border: 1px solid var(--dim);
+      color: var(--dim);
+      margin: 8px 0;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    .sync-box {
+      background: #080808;
+      border: 1px solid #222;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+    .sync-box input[type="text"] {
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      color: var(--fg);
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 11px;
+      margin-top: 4px;
+      border-radius: 2px;
+    }
+    .test-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .test-row input { flex: 1; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    button {
+      background: #111;
+      color: var(--fg);
+      border: 1px solid #444;
+      padding: 12px 8px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      touch-action: manipulation;
+    }
+    button:active {
+      background: #222;
+      transform: scale(0.985);
+    }
+    button.primary {
+      background: #003322;
+      border-color: var(--dim);
+      grid-column: span 2;
+      padding: 16px;
+      font-size: 15px;
+    }
+    button.danger {
+      color: #ff6666;
+      border-color: #442222;
+    }
+    button.disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      color: #666;
+      border-color: #333;
+      background: #0a0a0a;
+    }
+    button.disabled:active {
+      transform: none;
+      background: #0a0a0a;
+    }
+    .list-container {
+      background: #0a0a0a;
+      border: 1px solid #222;
+      min-height: 180px;
+      max-height: 320px;
+      overflow-y: auto;
+      margin: 12px 0;
+      padding: 4px 0;
+    }
+    .list-item {
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 15px;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item span {
+      flex: 1;
+      word-break: break-word;
+    }
+    .list-item button {
+      background: transparent;
+      border: none;
+      color: #ff4444;
+      font-size: 18px;
+      padding: 4px 10px;
+      margin: 0;
+      min-width: 36px;
+    }
+    .empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: #444;
+      font-size: 13px;
+    }
+    .instructions {
+      font-size: 11px;
+      color: #555;
+      line-height: 1.5;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #222;
+    }
+    .count {
+      font-size: 11px;
+      color: #555;
+      text-align: right;
+      margin-top: 4px;
+    }
+    .log {
+      font-size: 11px;
+      color: var(--dim);
+      background: #04120c;
+      border: 1px solid #0a2a1a;
+      padding: 6px 8px;
+      min-height: 24px;
+      margin-top: 8px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SILENT LIST</h1>
+      <div id="status" class="status">IDLE</div>
+    </header>
 
+    <div id="mode" class="mode">TRANSCRIBING • dead air</div>
+
+    <div class="sync-box">
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; margin-bottom:6px;">
+        <input type="checkbox" id="serverSync" style="accent-color:#00ff9f; width:14px; height:14px;">
+        <span style="font-weight:600">Sync additions to Firebase RTDB</span>
+      </label>
+      <div>Database Endpoint URL:</div>
+      <input type="text" id="dbUrlInput" value="https://gen-lang-client-0522812427-default-rtdb.firebaseio.com/test.json">
+      <div class="test-row">
+        <input type="text" id="testMsgInput" placeholder="Enter manual test message..." value="test connection message">
+        <button id="testBtn" style="padding: 6px 12px; font-size: 12px;">TEST POST</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn" class="primary">START LISTENING</button>
+      <button id="commandsBtn" class="disabled" disabled title="Coming later — voice commands disabled for now">LISTEN TO COMMANDS</button>
+      <button id="clearBtn" class="danger">CLEAR ALL</button>
+    </div>
+
+    <div id="listContainer" class="list-container">
+      <div class="empty">empty — speak items naturally</div>
+    </div>
+    <div id="count" class="count">0 items</div>
+
+    <div class="log" id="log">System logs and sync responses appear here...</div>
+
+    <div class="instructions">
+      <strong>how it works:</strong><br>
+      • tap start → speak items (one or a few at a time)<br>
+      • soft beep confirms each addition (no talking back)<br>
+      • every spoken phrase is added as a list item (no commands intercepted)<br>
+      • check “Sync additions to Firebase RTDB” → each new item automatically POSTs to your database<br>
+      • use the "TEST POST" panel above to verify your endpoint<br>
+      • list saves automatically in this browser<br>
+      • CLEAR ALL wipes the list<br>
+      • “LISTEN TO COMMANDS” is reserved for later
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG ===
+    const BEEP_FREQ = 880;      // pleasant A5
+    const BEEP_DURATION = 70;   // ms
+    const BEEP_VOLUME = 0.06;   // very soft for dead air
+
+    // === STATE ===
+    let list = [];
+    let isListening = false;
+    let recognition = null;
+    let audioCtx = null;
+    let audioUnlocked = false;
+    let lastTranscript = '';
+    let serverSyncEnabled = false;
+    let dbUrl = 'https://gen-lang-client-0522812427-default-rtdb.firebaseio.com/test.json';
+
+    // === PERSISTENCE ===
+    function loadList() {
+      try {
+        const saved = localStorage.getItem('silentVoiceList');
+        if (saved) list = JSON.parse(saved);
+      } catch (e) {}
+    }
+
+    function loadServerPrefs() {
+      try {
+        const pref = localStorage.getItem('serverSyncEnabled');
+        if (pref !== null) serverSyncEnabled = (pref === 'true');
+        const savedUrl = localStorage.getItem('firebaseDbUrl');
+        if (savedUrl) dbUrl = savedUrl;
+      } catch (e) {}
+    }
+
+    function saveServerPrefs() {
+      try {
+        localStorage.setItem('serverSyncEnabled', serverSyncEnabled ? 'true' : 'false');
+        localStorage.setItem('firebaseDbUrl', dbUrl);
+      } catch (e) {}
+    }
+
+    function saveList() {
+      try {
+        localStorage.setItem('silentVoiceList', JSON.stringify(list));
+      } catch (e) {}
+      updateDisplay();
+    }
+
+    // === UI ===
+    function updateDisplay() {
+      const container = document.getElementById('listContainer');
+      const countEl = document.getElementById('count');
+      container.innerHTML = '';
+      if (list.length === 0) {
+        container.innerHTML = '<div class="empty">empty — speak items naturally</div>';
+        countEl.textContent = '0 items';
+        return;
+      }
+      list.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.innerHTML = `
+          <span>${escapeHtml(item)}</span>
+          <button aria-label="remove ${item}">×</button>
+        `;
+        div.querySelector('button').onclick = (e) => {
+          e.stopPropagation();
+          list.splice(idx, 1);
+          saveList();
+        };
+        container.appendChild(div);
+      });
+      countEl.textContent = `${list.length} item${list.length === 1 ? '' : 's'}`;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    function setStatus(text) {
+      document.getElementById('status').textContent = text;
+    }
+
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.textContent = msg;
+    }
+
+    // === AUDIO: SOFT BEEP (dead air confirmation) ===
+    function unlockAudio() {
+      if (audioUnlocked) return;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.resume().then(() => {
+          audioUnlocked = true;
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    function playSoftBeep() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        osc.type = 'sine';
+        osc.frequency.value = BEEP_FREQ;
+        filter.type = 'lowpass';
+        filter.frequency.value = 1200;
+        gain.gain.value = BEEP_VOLUME;
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        const now = audioCtx.currentTime;
+        gain.gain.setValueAtTime(BEEP_VOLUME, now);
+        gain.gain.linearRampToValueAtTime(0.0001, now + (BEEP_DURATION / 1000) + 0.06);
+        setTimeout(() => {
+          try { osc.stop(); } catch (_) {}
+        }, BEEP_DURATION + 120);
+      } catch (e) {}
+    }
+
+    // === FIREBASE POST SYNC ===
+    function syncItemToFirebase(messageText) {
+      if (!messageText) return;
+      const currentUrl = document.getElementById('dbUrlInput').value.trim() || dbUrl;
+
+      // 1. Generate YYYYMMDDHHMMSS timestamp ID
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const timestampId = now.getFullYear() +
+        pad(now.getMonth() + 1) +
+        pad(now.getDate()) +
+        pad(now.getHours()) +
+        pad(now.getMinutes()) +
+        pad(now.getSeconds());
+
+      log(`posting to firebase...`);
+
+      // 2. POST request with the structured body
+      fetch(currentUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          id: timestampId,
+          msg: messageText
+        })
+      })
+      .then(r => r.json())
+      .then(res => {
+        log(`posted to firebase successfully: key name -> ${res.name || 'success'}`);
+      })
+      .catch(err => {
+        log(`firebase sync failed: ${err.message || err}`);
+      });
+    }
+
+    // === LIST LOGIC ===
+    function cleanItem(text) {
+      let t = text.trim();
+      // light cleanup of common spoken prefixes (still no command interception)
+      t = t.replace(/^(add|buy|get|put|need|grab|pick up|and|also|plus)\s+/i, '');
+      t = t.replace(/\s+(please|thanks|thank you)$/i, '');
+      t = t.trim();
+      if (t.length < 2) return null;
+      return t;
+    }
+
+    function addItem(rawText) {
+      const cleaned = cleanItem(rawText);
+      if (!cleaned) return false;
+
+      const lower = cleaned.toLowerCase();
+      const exists = list.some(it => it.toLowerCase() === lower);
+      if (exists) {
+        log('already on list');
+        playSoftBeep();
+        return false;
+      }
+
+      list.push(cleaned);
+      saveList();
+      playSoftBeep();
+      log(`added: ${cleaned}`);
+
+      // Firebase sync check
+      const syncBox = document.getElementById('serverSync');
+      if (syncBox && syncBox.checked) {
+        syncItemToFirebase(cleaned);
+      }
+      return true;
+    }
+
+    // === SPEECH RECOGNITION ===
+    function startRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        alert('Speech Recognition not supported. Use Safari on iPhone or Chrome.');
+        return;
+      }
+
+      const rec = new SpeechRec();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
+      rec.maxAlternatives = 1;
+
+      rec.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            const transcript = event.results[i][0].transcript.trim();
+            if (!transcript || transcript === lastTranscript) continue;
+            lastTranscript = transcript;
+            // Pure transcription — no command interception
+            addItem(transcript);
+          }
+        }
+      };
+
+      rec.onerror = (event) => {
+        console.warn('Speech error:', event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          setStatus('MIC DENIED');
+          isListening = false;
+          const btn = document.getElementById('startBtn');
+          if (btn) btn.textContent = 'START LISTENING';
+          recognition = null;
+        }
+      };
+
+      rec.onend = () => {
+        if (isListening) {
+          setTimeout(() => {
+            if (isListening) {
+              try { startRecognition(); } catch (e) {}
+            }
+          }, 220);
+        } else {
+          recognition = null;
+        }
+      };
+
+      try {
+        rec.start();
+        recognition = rec;
+        isListening = true;
+        const btn = document.getElementById('startBtn');
+        if (btn) btn.textContent = 'STOP LISTENING';
+        setStatus('LISTENING');
+        log('listening — speak naturally');
+      } catch (e) {
+        setStatus('START FAILED');
+        recognition = null;
+        isListening = false;
+      }
+    }
+
+    function stopRecognition() {
+      if (recognition) {
+        try { recognition.stop(); } catch (_) {}
+        recognition = null;
+      }
+      isListening = false;
+      const btn = document.getElementById('startBtn');
+      if (btn) btn.textContent = 'START LISTENING';
+      setStatus('PAUSED');
+    }
+
+    function toggleListening() {
+      unlockAudio();
+      if (!isListening) {
+        startRecognition();
+      } else {
+        stopRecognition();
+      }
+    }
+
+    // === INIT ===
+    function init() {
+      loadList();
+      loadServerPrefs();
+      updateDisplay();
+
+      const syncBox = document.getElementById('serverSync');
+      const dbUrlInput = document.getElementById('dbUrlInput');
+
+      if (syncBox) {
+        syncBox.checked = serverSyncEnabled;
+        syncBox.onchange = () => {
+          serverSyncEnabled = syncBox.checked;
+          saveServerPrefs();
+          if (serverSyncEnabled) {
+            log('firebase sync enabled');
+          }
+        };
+      }
+
+      if (dbUrlInput) {
+        dbUrlInput.value = dbUrl;
+        dbUrlInput.onchange = () => {
+          dbUrl = dbUrlInput.value.trim();
+          saveServerPrefs();
+        };
+      }
+
+      // Test button wiring
+      document.getElementById('testBtn').onclick = () => {
+        unlockAudio();
+        const testMsg = document.getElementById('testMsgInput').value.trim() || 'test message';
+        syncItemToFirebase(testMsg);
+      };
+
+      // Buttons
+      document.getElementById('startBtn').onclick = toggleListening;
+
+      document.getElementById('clearBtn').onclick = () => {
+        if (list.length === 0) return;
+        if (confirm('Clear the entire list?')) {
+          list = [];
+          saveList();
+          playSoftBeep();
+          log('cleared');
+        }
+      };
+
+      // Greyed-out commands button does nothing (placeholder for later)
+      document.getElementById('commandsBtn').onclick = (e) => {
+        e.preventDefault();
+      };
+
+      setStatus('READY');
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
