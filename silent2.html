@@ -78,12 +78,28 @@
       margin-top: 4px;
       border-radius: 2px;
     }
+    .sync-box textarea {
+      width: 100%;
+      background: #111;
+      border: 1px solid #333;
+      color: var(--fg);
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 11px;
+      margin-top: 4px;
+      border-radius: 2px;
+      resize: vertical;
+      min-height: 80px;
+    }
     .test-row {
       display: flex;
       gap: 6px;
       margin-top: 6px;
     }
-    .test-row input { flex: 1; }
+    .test-row button {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
     .controls {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -206,9 +222,10 @@
       </label>
       <div>Database Endpoint URL:</div>
       <input type="text" id="dbUrlInput" value="https://gen-lang-client-0522812427-default-rtdb.firebaseio.com/test.json">
+      <div style="margin-top: 8px;">Test Connection:</div>
+      <textarea id="testMsgInput" placeholder="Enter test message to POST to your Firebase endpoint...">test connection message</textarea>
       <div class="test-row">
-        <input type="text" id="testMsgInput" placeholder="Enter manual test message..." value="test connection message">
-        <button id="testBtn" style="padding: 6px 12px; font-size: 12px;">TEST POST</button>
+        <button id="testBtn">TEST POST</button>
       </div>
     </div>
 
@@ -230,11 +247,11 @@
       • tap start → speak items (one or a few at a time)<br>
       • soft beep confirms each addition (no talking back)<br>
       • every spoken phrase is added as a list item (no commands intercepted)<br>
-      • check “Sync additions to Firebase RTDB” → each new item automatically POSTs to your database<br>
+      • check "Sync additions to Firebase RTDB" → each new item automatically POSTs to your database<br>
       • use the "TEST POST" panel above to verify your endpoint<br>
       • list saves automatically in this browser<br>
       • CLEAR ALL wipes the list<br>
-      • “LISTEN TO COMMANDS” is reserved for later
+      • "LISTEN TO COMMANDS" is reserved for later
     </div>
   </div>
 
