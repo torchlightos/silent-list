@@ -88,8 +88,9 @@
       font-size: 11px;
       margin-top: 4px;
       border-radius: 2px;
-      resize: vertical;
-      min-height: 80px;
+      resize: both;
+      min-height: 400px;
+      max-height: none;
     }
     .test-row {
       display: flex;
@@ -223,7 +224,7 @@
       <div>Database Endpoint URL:</div>
       <input type="text" id="dbUrlInput" value="https://gen-lang-client-0522812427-default-rtdb.firebaseio.com/test.json">
       <div style="margin-top: 8px;">Test Connection:</div>
-      <textarea id="testMsgInput" placeholder="Enter test message to POST to your Firebase endpoint...">test connection message</textarea>
+      <textarea id="testMsgInput" placeholder="Enter test message to POST to your Firebase endpoint... (drag corner to resize)">test connection message</textarea>
       <div class="test-row">
         <button id="testBtn">TEST POST</button>
       </div>
