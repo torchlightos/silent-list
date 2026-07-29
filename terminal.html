@@ -212,15 +212,46 @@ function updateAnimations(now) {
   activeAnimations = activeAnimations.filter(a => !a.done);
 }
 
+// --- Network logging helper ---
+// Logs to console and prints a short summary to the terminal UI.
+async function fetchWithLogging(url, opts = {}) {
+  const method = (opts.method || 'GET').toUpperCase();
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] FETCH START: ${method} ${url}`, opts);
+  printToTerminal(`[FETCH] ${method} ${url}`);
+  const start = Date.now();
+
+  try {
+    const response = await fetch(url, opts);
+    // try reading text safely
+    let text = '';
+    try {
+      text = await response.text();
+    } catch (e) {
+      text = `<unable to read body: ${e.message}>`;
+    }
+    const duration = Date.now() - start;
+    const preview = (text || '').replace(/\s+/g, ' ').slice(0, 300);
+    console.log(`[${timestamp}] FETCH DONE: ${method} ${url} -> ${response.status} (${duration}ms)`, { bodyPreview: preview });
+    printToTerminal(`[RESPONSE ${response.status}] ${duration}ms - ${preview}`);
+    return { res: response, text };
+  } catch (err) {
+    const duration = Date.now() - start;
+    console.error(`[${timestamp}] FETCH ERROR: ${method} ${url} (${duration}ms)`, err);
+    printToTerminal(`[FETCH ERROR] ${method} ${url} - ${err.message}`);
+    throw err;
+  }
+}
+
 // API Stream Logic
 async function initStream() {
   printToTerminal('Connecting to IRC stream...');
   try {
     // 1. Call reset
-    await fetch(`${BASE_URL}/last1?command=reset`, { mode: 'cors' }).catch(()=>{});
+    await fetchWithLogging(`${BASE_URL}/last1?command=reset`, { mode: 'cors' }).catch(()=>{});
     
     // 2. Call catchuptonow
-    await fetch(`${BASE_URL}/last1?command=catchuptonow`, { mode: 'cors' }).catch(()=>{});
+    await fetchWithLogging(`${BASE_URL}/last1?command=catchuptonow`, { mode: 'cors' }).catch(()=>{});
     
     printToTerminal('Stream connected. Listening for incoming messages...');
     
@@ -235,15 +266,27 @@ async function initStream() {
 
 async function pollStream() {
   try {
-    const res = await fetch(`${BASE_URL}/last1`, { mode: 'cors' });
-    const data = await res.text();
+    const { res, text } = await fetchWithLogging(`${BASE_URL}/last1`, { mode: 'cors' }).catch(e => ({ res: null, text: null }));
+    if (!res) {
+      // fetch failed, schedule next poll
+      return;
+    }
 
-    if (data && data !== 'NO_NEW_MESSAGES' && data !== lastMessageSeen) {
-      lastMessageSeen = data;
-      printToTerminal(data);
+    // If server responded 200 and body is meaningful
+    if (text && text !== 'NO_NEW_MESSAGES' && text !== lastMessageSeen) {
+      lastMessageSeen = text;
+      printToTerminal(text);
+    } else {
+      // Log that there were no new messages (so you can see the polling behavior)
+      // Don't print every poll to terminal to avoid spamming; log to console and a short terminal line
+      console.log(`[pollStream] no new messages or unchanged`);
+      // small terminal hint to show polling is happening
+      printToTerminal('[poll] NO_NEW_MESSAGES or unchanged');
     }
   } catch (e) {
-    // Silent fail on network poll drops
+    // Silent fail on network poll drops, but also log
+    console.error('pollStream error', e);
+    printToTerminal(`[poll ERROR] ${e.message}`);
   } finally {
     setTimeout(pollStream, 500); // Poll delay
   }
@@ -251,10 +294,12 @@ async function pollStream() {
 
 async function sendMessage(msg) {
   printToTerminal(`> ${msg}`);
+
+  const url = `${BASE_URL}/insert?msg=${encodeURIComponent(msg)}`;
   try {
-    await fetch(`${BASE_URL}/insert?msg=${encodeURIComponent(msg)}`, { mode: 'cors' });
+    await fetchWithLogging(url, { mode: 'cors' });
   } catch (e) {
-    printToTerminal(`[Error sending message]`);
+    printToTerminal(`[Error sending message] ${e.message}`);
   }
 }
 
