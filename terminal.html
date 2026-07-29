@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Canvas IRC Terminal</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #0d0f12;
+      color: #00ff66;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    #canvas-container {
+      position: relative;
+      border: 2px solid #00ff66;
+      box-shadow: 0 0 20px rgba(0, 255, 102, 0.2);
+    }
+    canvas {
+      display: block;
+      background: #05070a;
+    }
+    /* Invisible native input over canvas for mobile/focus handling */
+    #hidden-input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <canvas id="terminal" width="900" height="600"></canvas>
+  <input type="text" id="hidden-input" autocomplete="off" />
+</div>
+
+<script>
+const BASE_URL = 'http://150.230.178.78:28431';
+const CYCLE_SEQ = ' .,.-.,._.,.-pP09-0-o-O-*-0po-.,._.,qopobodop,._.PoOopODO-9-6-p-o-q-e-b-g-6-O-o-0oO,o';
+
+// Canvas Setup
+const canvas = document.getElementById('terminal');
+const ctx = canvas.getContext('2d');
+const hiddenInput = document.getElementById('hidden-input');
+
+// Layout Dimensions
+const SIDEBAR_WIDTH = 120;
+const PADDING = 15;
+const FONT_SIZE = 14;
+const LINE_HEIGHT = 18;
+const CHAR_WIDTH = 8.5; // Monospace width calculation
+
+ctx.font = `${FONT_SIZE}px monospace`;
+
+// Terminal Canvas State
+let lines = []; // Array of { text: string, animateQueue: [] }
+let inputText = '';
+let lastMessageSeen = '';
+
+// Slider Control State
+// Slider maps from 0 (1s / 1000ms pulse) to 1 (OMG! / 2ms pulse)
+let sliderVal = 0.85; 
+let isDraggingSlider = false;
+
+// Calculate delay in ms from slider position (exponential scale for better feel)
+function getFrameDelayMs() {
+  // 1000ms down to 2ms
+  const minDelay = 2;
+  const maxDelay = 1000;
+  return Math.max(minDelay, maxDelay * Math.pow(1 - sliderVal, 3));
+}
+
+// Active animations tracker
+// Each item: { lineIndex, charIndex, cycleStep, targetChar, done }
+let activeAnimations = [];
+
+// Focus hidden input on canvas click
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  // Check if clicking slider
+  const sliderX = canvas.width - SIDEBAR_WIDTH + 45;
+  const sliderYTop = 60;
+  const sliderHeight = canvas.height - 120;
+
+  if (x >= canvas.width - SIDEBAR_WIDTH) {
+    // Click inside sidebar zone
+    updateSliderFromMouse(y);
+  } else {
+    hiddenInput.focus();
+  }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  if (x >= canvas.width - SIDEBAR_WIDTH) {
+    isDraggingSlider = true;
+    updateSliderFromMouse(e.clientY - rect.top);
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (isDraggingSlider) {
+    const rect = canvas.getBoundingClientRect();
+    updateSliderFromMouse(e.clientY - rect.top);
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  isDraggingSlider = false;
+});
+
+function updateSliderFromMouse(mouseY) {
+  const sliderYTop = 60;
+  const sliderHeight = canvas.height - 120;
+  let relativeY = mouseY - sliderYTop;
+  relativeY = Math.max(0, Math.min(sliderHeight, relativeY));
+  
+  // Inverse: Top is OMG (1), Bottom is 1s (0)
+  sliderVal = 1 - (relativeY / sliderHeight);
+}
+
+// Handle typing input
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    if (inputText.trim().length > 0) {
+      sendMessage(inputText);
+      inputText = '';
+    }
+  } else if (e.key === 'Backspace') {
+    inputText = inputText.slice(0, -1);
+  } else if (e.key.length === 1) {
+    inputText += e.key;
+  }
+});
+
+// App Logic: Print text to terminal line with rolling character effect
+function printToTerminal(text) {
+  const maxCharsPerLine = Math.floor((canvas.width - SIDEBAR_WIDTH - (PADDING * 2)) / CHAR_WIDTH);
+  
+  // Handle wrapping
+  for (let i = 0; i < text.length; i += maxCharsPerLine) {
+    const chunk = text.substring(i, i + maxCharsPerLine);
+    const lineIndex = lines.length;
+    
+    // Create line placeholder initialized with spaces
+    lines.push({
+      renderedChars: new Array(chunk.length).fill(' ')
+    });
+
+    // Queue character roll animations sequentially
+    for (let charIdx = 0; charIdx < chunk.length; charIdx++) {
+      activeAnimations.push({
+        lineIndex: lineIndex,
+        charIndex: charIdx,
+        cycleStep: 0,
+        targetChar: chunk[charIdx],
+        done: false
+      });
+    }
+  }
+}
+
+// Animation Loop for Rolling Characters
+let lastFrameTime = performance.now();
+let timeAccumulator = 0;
+
+function updateAnimations(now) {
+  const delta = now - lastFrameTime;
+  lastFrameTime = now;
+  timeAccumulator += delta;
+
+  const stepDelay = getFrameDelayMs();
+
+  while (timeAccumulator >= stepDelay) {
+    timeAccumulator -= stepDelay;
+
+    // Advance cycle animation frames
+    for (let i = 0; i < activeAnimations.length; i++) {
+      const anim = activeAnimations[i];
+      if (anim.done) continue;
+
+      if (anim.cycleStep < CYCLE_SEQ.length) {
+        // Render sequence frame
+        lines[anim.lineIndex].renderedChars[anim.charIndex] = CYCLE_SEQ[anim.cycleStep];
+        anim.cycleStep++;
+      } else {
+        // Sequence done, lock target character
+        lines[anim.lineIndex].renderedChars[anim.charIndex] = anim.targetChar;
+        anim.done = true;
+      }
+    }
+  }
+
+  // Clean up completed animations
+  activeAnimations = activeAnimations.filter(a => !a.done);
+}
+
+// API Stream Logic
+async function initStream() {
+  printToTerminal('Connecting to IRC stream...');
+  try {
+    // 1. Call reset
+    await fetch(`${BASE_URL}/last1?command=reset`, { mode: 'cors' }).catch(()=>{});
+    
+    // 2. Call catchuptonow
+    await fetch(`${BASE_URL}/last1?command=catchuptonow`, { mode: 'cors' }).catch(()=>{});
+    
+    printToTerminal('Stream connected. Listening for incoming messages...');
+    
+    // Start Polling Loop
+    pollStream();
+  } catch (err) {
+    printToTerminal(`Connection Error: ${err.message}`);
+    // Fallback poll attempt anyway
+    setTimeout(pollStream, 2000);
+  }
+}
+
+async function pollStream() {
+  try {
+    const res = await fetch(`${BASE_URL}/last1`, { mode: 'cors' });
+    const data = await res.text();
+
+    if (data && data !== 'NO_NEW_MESSAGES' && data !== lastMessageSeen) {
+      lastMessageSeen = data;
+      printToTerminal(data);
+    }
+  } catch (e) {
+    // Silent fail on network poll drops
+  } finally {
+    setTimeout(pollStream, 500); // Poll delay
+  }
+}
+
+async function sendMessage(msg) {
+  printToTerminal(`> ${msg}`);
+  try {
+    await fetch(`${BASE_URL}/insert?msg=${encodeURIComponent(msg)}`, { mode: 'cors' });
+  } catch (e) {
+    printToTerminal(`[Error sending message]`);
+  }
+}
+
+// Canvas Render Loop
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const mainWidth = canvas.width - SIDEBAR_WIDTH;
+
+  // --- 1. RENDER TERMINAL TEXT AREA ---
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, mainWidth, canvas.height);
+
+  const maxVisibleLines = Math.floor((canvas.height - 60) / LINE_HEIGHT);
+  const startLine = Math.max(0, lines.length - maxVisibleLines);
+  const visibleLines = lines.slice(startLine);
+
+  ctx.fillStyle = '#00ff66';
+  ctx.font = `${FONT_SIZE}px monospace`;
+
+  // Draw Printed Lines
+  visibleLines.forEach((line, idx) => {
+    const y = PADDING + FONT_SIZE + (idx * LINE_HEIGHT);
+    const lineText = line.renderedChars.join('');
+    ctx.fillText(lineText, PADDING, y);
+  });
+
+  // Draw Input Prompt Line
+  const inputY = canvas.height - PADDING;
+  const promptText = `> ${inputText}`;
+  ctx.fillText(promptText, PADDING, inputY);
+
+  // Blinking Cursor at end of input
+  if (Math.floor(Date.now() / 500) % 2 === 0) {
+    const cursorX = PADDING + (promptText.length * CHAR_WIDTH);
+    ctx.fillRect(cursorX, inputY - FONT_SIZE + 2, 8, FONT_SIZE);
+  }
+
+  // --- 2. RENDER SIDEBAR & SLIDER ---
+  ctx.fillStyle = '#11151c';
+  ctx.fillRect(mainWidth, 0, SIDEBAR_WIDTH, canvas.height);
+
+  // Border line separating terminal from sidebar
+  ctx.strokeStyle = '#00ff66';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(mainWidth, 0);
+  ctx.lineTo(mainWidth, canvas.height);
+  ctx.stroke();
+
+  // Sidebar Label
+  ctx.fillStyle = '#00ff66';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('SPEED CONTROL', mainWidth + (SIDEBAR_WIDTH / 2), 25);
+
+  const sliderX = mainWidth + (SIDEBAR_WIDTH / 2);
+  const sliderYTop = 60;
+  const sliderYBottom = canvas.height - 60;
+  const sliderHeight = sliderYBottom - sliderYTop;
+
+  // Draw Slider Track Line
+  ctx.strokeStyle = '#225533';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(sliderX, sliderYTop);
+  ctx.lineTo(sliderX, sliderYBottom);
+  ctx.stroke();
+
+  // Slider Thumb Position
+  const thumbY = sliderYBottom - (sliderVal * sliderHeight);
+
+  // Draw Thumb
+  ctx.fillStyle = '#00ff66';
+  ctx.shadowColor = '#00ff66';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(sliderX, thumbY, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0; // reset glow
+
+  // Labels for Speed
+  ctx.fillStyle = sliderVal > 0.8 ? '#00ff66' : '#558866';
+  ctx.fillText('OMG!', sliderX, sliderYTop - 15);
+
+  ctx.fillStyle = sliderVal < 0.2 ? '#00ff66' : '#558866';
+  ctx.fillText('1s Pulse', sliderX, sliderYBottom + 20);
+
+  // Delay read-out
+  ctx.fillStyle = '#00ff66';
+  ctx.fillText(`${Math.round(getFrameDelayMs())} ms/step`, sliderX, thumbY + (thumbY < canvas.height - 80 ? 25 : -15));
+
+  ctx.textAlign = 'left'; // Reset text align
+}
+
+// Master Loop
+function mainLoop(now) {
+  updateAnimations(now);
+  render();
+  requestAnimationFrame(mainLoop);
+}
+
+// Start App
+initStream();
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>
