@@ -1,0 +1,670 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a3d62">
+  <title>Tradesman Calc 4400 – v2</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #111;
+      color: #e8f4fc;
+      min-height: 100dvh;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 12px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      user-select: none;
+    }
+
+    /* ========== CALCULATOR ========== */
+    .calc {
+      width: 100%;
+      max-width: 340px;
+      background: #0c4a75;
+      border-radius: 18px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.1);
+      overflow: hidden;
+      border: 3px solid #1a6a9e;
+      flex-shrink: 0;
+    }
+    .brand {
+      text-align: center;
+      padding: 8px 10px 2px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #8ec8e8;
+      text-transform: uppercase;
+    }
+    .model {
+      text-align: center;
+      font-size: 10px;
+      color: #5ba3c9;
+      margin-bottom: 4px;
+    }
+    .display-wrap {
+      background: #041820;
+      margin: 0 10px 10px;
+      border-radius: 8px;
+      padding: 10px 12px;
+      border: 2px solid #0a3048;
+      min-height: 72px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .display-label {
+      font-size: 11px;
+      color: #4a9bc4;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      min-height: 14px;
+      margin-bottom: 2px;
+    }
+    .display {
+      font-family: "SF Mono", "Menlo", "Consolas", "Courier New", monospace;
+      font-size: 22px;
+      font-weight: 600;
+      color: #6dffb0;
+      text-align: right;
+      word-break: break-all;
+      line-height: 1.25;
+      min-height: 28px;
+    }
+    .display.small { font-size: 17px; }
+
+    .keys {
+      padding: 0 8px 12px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      height: 44px;
+      cursor: pointer;
+      color: #fff;
+      background: #1a5f8f;
+      box-shadow: 0 3px 0 #0d3a5c;
+      transition: transform 0.04s, box-shadow 0.04s;
+      touch-action: manipulation;
+      line-height: 1.1;
+      padding: 2px;
+    }
+    button:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 #0d3a5c;
+    }
+    button small {
+      display: block;
+      font-size: 9px;
+      font-weight: 500;
+      opacity: 0.75;
+      margin-top: 1px;
+    }
+
+    /* Key color variants */
+    .fn { background: #c45c26; box-shadow: 0 3px 0 #8a3d14; font-size: 12px; }
+    .fn:active { box-shadow: 0 1px 0 #8a3d14; }
+    .unit { background: #2a7a4a; box-shadow: 0 3px 0 #1a5230; font-size: 12px; }
+    .unit:active { box-shadow: 0 1px 0 #1a5230; }
+    .op { background: #3d5a80; box-shadow: 0 3px 0 #2a4060; }
+    .op:active { box-shadow: 0 1px 0 #2a4060; }
+    .conv { background: #e6a817; color: #222; box-shadow: 0 3px 0 #b07d0f; font-weight: 700; }
+    .conv:active { box-shadow: 0 1px 0 #b07d0f; }
+    .clear { background: #8b2e2e; box-shadow: 0 3px 0 #5c1c1c; }
+    .clear:active { box-shadow: 0 1px 0 #5c1c1c; }
+    .wide2 { grid-column: span 2; }
+    .num { font-size: 16px; }
+
+    /* ========== GUIDE PANEL ========== */
+    .guide {
+      width: 100%;
+      max-width: 300px;
+      background: #1a1a1a;
+      border-radius: 14px;
+      border: 1px solid #333;
+      padding: 14px 16px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #ccc;
+      flex-shrink: 0;
+    }
+    .guide h2 {
+      font-size: 14px;
+      color: #7ec8e8;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .guide .step {
+      background: #222;
+      border-left: 3px solid #2a7a4a;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      border-radius: 0 6px 6px 0;
+      color: #e0e0e0;
+    }
+    .guide .step strong { color: #7dffb3; }
+    .guide .hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #333;
+    }
+    .guide .status {
+      font-size: 12px;
+      color: #5ba3c9;
+      margin-bottom: 10px;
+    }
+    .guide .stored {
+      font-size: 12px;
+      margin-top: 6px;
+      color: #aaa;
+    }
+    .guide .stored span {
+      color: #7dffb3;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== CALCULATOR ========== -->
+  <div class="calc">
+    <div class="brand">Calculated Industries</div>
+    <div class="model">TRADESMAN CALC · Model 4400</div>
+
+    <div class="display-wrap">
+      <div class="display-label" id="label">READY</div>
+      <div class="display" id="display">0</div>
+    </div>
+
+    <div class="keys">
+      <!-- Row 1: Triangle + Angle -->
+      <button class="fn" data-action="adj">Adj</button>
+      <button class="fn" data-action="opp">Opp</button>
+      <button class="fn" data-action="hyp">Hyp</button>
+      <button class="fn" data-action="angle">Angle</button>
+      <button class="op" data-action="dms">dms</button>
+
+      <!-- Row 2: Trig -->
+      <button class="fn" data-action="sin">Sin</button>
+      <button class="fn" data-action="cos">Cos</button>
+      <button class="fn" data-action="tan">Tan</button>
+      <button class="op" data-action="sq">x²</button>
+      <button class="op" data-action="sqrt">√x</button>
+
+      <!-- Row 3: Geometry + Metric -->
+      <button class="fn" data-action="arc">Arc</button>
+      <button class="fn" data-action="diam">Diam</button>
+      <button class="fn" data-action="hex">Hex</button>
+      <button class="unit" data-action="m">m</button>
+      <button class="unit" data-action="cm">cm</button>
+
+      <!-- Row 4: Units -->
+      <button class="unit" data-action="yds">Yds</button>
+      <button class="unit" data-action="feet">Feet</button>
+      <button class="unit" data-action="inch">Inch</button>
+      <button class="unit" data-action="frac">/</button>
+      <button class="unit" data-action="mm">mm</button>
+
+      <!-- Row 5: Conv + numbers -->
+      <button class="conv" data-action="conv">Conv</button>
+      <button class="num" data-num="7">7</button>
+      <button class="num" data-num="8">8</button>
+      <button class="num" data-num="9">9</button>
+      <button class="op" data-action="div">÷</button>
+
+      <!-- Row 6 -->
+      <button class="op" data-action="rcl">Rcl</button>
+      <button class="num" data-num="4">4</button>
+      <button class="num" data-num="5">5</button>
+      <button class="num" data-num="6">6</button>
+      <button class="op" data-action="mul">×</button>
+
+      <!-- Row 7 -->
+      <button class="op" data-action="mplus">M+</button>
+      <button class="num" data-num="1">1</button>
+      <button class="num" data-num="2">2</button>
+      <button class="num" data-num="3">3</button>
+      <button class="op" data-action="sub">−</button>
+
+      <!-- Row 8 -->
+      <button class="clear" data-action="clear">On/C</button>
+      <button class="num" data-num="0">0</button>
+      <button class="num" data-num=".">.</button>
+      <button class="op" data-action="equals">=</button>
+      <button class="op" data-action="add">+</button>
+    </div>
+  </div>
+
+  <!-- ========== LIVE GUIDE ========== -->
+  <div class="guide">
+    <h2>Next Step</h2>
+    <div class="status" id="guide-status">Ready — start entering a value</div>
+    <div class="step" id="guide-step">
+      <strong>1.</strong> Type a number (example: 12)<br>
+      <strong>2.</strong> Press <strong>Feet</strong> or <strong>Inch</strong><br>
+      <strong>3.</strong> Press <strong>Adj</strong>, <strong>Opp</strong>, or <strong>Hyp</strong> to store it
+    </div>
+    <div class="stored" id="guide-stored"></div>
+    <div class="hint">
+      Classic right-triangle flow:<br>
+      Enter any two sides (or a side + angle) → press the unknown key to solve.<br><br>
+      <strong>Adj</strong> = adjacent (run)<br>
+      <strong>Opp</strong> = opposite (rise)<br>
+      <strong>Hyp</strong> = hypotenuse (diagonal / rafter)<br>
+      <strong>Angle</strong> = angle in degrees
+    </div>
+  </div>
+
+  <script>
+    // ========== STATE ==========
+    const state = {
+      entry: '',
+      feet: 0,
+      inches: 0,
+      fracNum: 0,
+      fracDen: 16,
+      mode: 'num',          // num | feet | inch | frac
+
+      // right triangle (all stored in total inches except angle)
+      adj: null,
+      opp: null,
+      hyp: null,
+      angle: null,          // degrees
+
+      lastValue: 0,         // total inches
+      pendingOp: null,
+      memory: 0,
+      convArmed: false
+    };
+
+    // ========== HELPERS ==========
+    function gcd(a, b) {
+      a = Math.abs(a); b = Math.abs(b);
+      while (b) { [a, b] = [b, a % b]; }
+      return a || 1;
+    }
+
+    function toInches(ft, inch, num, den) {
+      return (ft * 12) + inch + (num / (den || 1));
+    }
+
+    function fromInches(total) {
+      if (!isFinite(total)) return { ft: 0, inch: 0, num: 0, den: 1, neg: false };
+      const neg = total < 0;
+      total = Math.abs(total);
+      let ft = Math.floor(total / 12);
+      let rem = total - ft * 12;
+      let inch = Math.floor(rem);
+      let frac = rem - inch;
+
+      let sixteenths = Math.round(frac * 16);
+      if (sixteenths === 16) {
+        sixteenths = 0;
+        inch += 1;
+        if (inch === 12) { inch = 0; ft += 1; }
+      }
+
+      let num = sixteenths, den = 16;
+      if (num === 0) den = 1;
+      else {
+        const g = gcd(num, den);
+        num /= g; den /= g;
+      }
+      return { ft, inch, num, den, neg };
+    }
+
+    function formatDim(total) {
+      if (total == null || !isFinite(total)) return '—';
+      const { ft, inch, num, den, neg } = fromInches(total);
+      let s = neg ? '−' : '';
+      if (ft > 0) s += ft + ' FT ';
+      if (inch > 0 || (ft === 0 && num === 0)) s += inch;
+      if (num > 0) {
+        if (inch > 0 || ft > 0) s += ' ';
+        s += num + '/' + den;
+      }
+      if (ft === 0 && inch === 0 && num === 0) s = (neg ? '−' : '') + '0';
+      if ((inch > 0 || num > 0) && ft === 0) s += ' IN';
+      else if (ft > 0 && (inch > 0 || num > 0)) s += ' IN';
+      else if (ft > 0) s = (neg ? '−' : '') + ft + ' FT';
+      return s.trim();
+    }
+
+    function formatAngle(deg) {
+      if (deg == null || !isFinite(deg)) return '—';
+      return deg.toFixed(4) + '°';
+    }
+
+    function currentEntryInches() {
+      if (state.feet || state.inches || state.fracNum) {
+        return toInches(state.feet, state.inches, state.fracNum, state.fracDen || 16);
+      }
+      const n = parseFloat(state.entry);
+      return isFinite(n) ? n : 0;
+    }
+
+    function clearEntry() {
+      state.entry = '';
+      state.feet = 0;
+      state.inches = 0;
+      state.fracNum = 0;
+      state.fracDen = 16;
+      state.mode = 'num';
+    }
+
+    function updateDisplay(text, label) {
+      const d = document.getElementById('display');
+      const l = document.getElementById('label');
+      d.textContent = text;
+      d.classList.toggle('small', text.length > 16);
+      if (label !== undefined) l.textContent = label;
+    }
+
+    function updateGuide() {
+      const status = document.getElementById('guide-status');
+      const step = document.getElementById('guide-step');
+      const stored = document.getElementById('guide-stored');
+
+      // Show what is currently stored
+      let storedHtml = '';
+      if (state.adj != null) storedHtml += `Adj: <span>${formatDim(state.adj)}</span><br>`;
+      if (state.opp != null) storedHtml += `Opp: <span>${formatDim(state.opp)}</span><br>`;
+      if (state.hyp != null) storedHtml += `Hyp: <span>${formatDim(state.hyp)}</span><br>`;
+      if (state.angle != null) storedHtml += `Angle: <span>${formatAngle(state.angle)}</span><br>`;
+      stored.innerHTML = storedHtml || '';
+
+      // Count known values
+      const known = [state.adj, state.opp, state.hyp, state.angle].filter(v => v != null).length;
+
+      if (known === 0) {
+        status.textContent = 'Ready — start entering a value';
+        step.innerHTML = `
+          <strong>1.</strong> Type a number (example: 12)<br>
+          <strong>2.</strong> Press <strong>Feet</strong> or <strong>Inch</strong><br>
+          <strong>3.</strong> Press <strong>Adj</strong>, <strong>Opp</strong>, or <strong>Hyp</strong> to store it
+        `;
+      } else if (known === 1) {
+        status.textContent = 'One value stored — enter the second known value';
+        step.innerHTML = `
+          Enter the second known side or angle,<br>
+          then press its key (<strong>Adj / Opp / Hyp / Angle</strong>).<br><br>
+          After two values are stored, press the unknown key to solve.
+        `;
+      } else {
+        status.textContent = 'Two (or more) values known — press the unknown key';
+        step.innerHTML = `
+          Press the key for the value you want:<br>
+          <strong>Hyp</strong> → diagonal / rafter length<br>
+          <strong>Angle</strong> → angle in degrees<br>
+          <strong>Adj</strong> or <strong>Opp</strong> → missing side
+        `;
+      }
+    }
+
+    // ========== TRIANGLE SOLVER ==========
+    function solveTriangle() {
+      let a = state.adj, o = state.opp, h = state.hyp, ang = state.angle;
+
+      // From two sides
+      if (a != null && o != null && h == null) {
+        h = Math.sqrt(a * a + o * o);
+        state.hyp = h;
+      }
+      if (a != null && h != null && o == null) {
+        o = Math.sqrt(h * h - a * a);
+        if (isFinite(o)) state.opp = o;
+      }
+      if (o != null && h != null && a == null) {
+        a = Math.sqrt(h * h - o * o);
+        if (isFinite(a)) state.adj = a;
+      }
+
+      // From side + angle
+      if (ang != null) {
+        const rad = ang * Math.PI / 180;
+        if (a != null && o == null) {
+          o = a * Math.tan(rad);
+          state.opp = o;
+        }
+        if (o != null && a == null) {
+          a = o / Math.tan(rad);
+          state.adj = a;
+        }
+        if (h != null && a == null) {
+          a = h * Math.cos(rad);
+          state.adj = a;
+        }
+        if (h != null && o == null) {
+          o = h * Math.sin(rad);
+          state.opp = o;
+        }
+        if (a != null && h == null) {
+          h = a / Math.cos(rad);
+          state.hyp = h;
+        }
+        if (o != null && h == null) {
+          h = o / Math.sin(rad);
+          state.hyp = h;
+        }
+      }
+
+      // Compute angle if we have two sides
+      if (state.adj != null && state.opp != null && state.angle == null) {
+        state.angle = Math.atan2(state.opp, state.adj) * 180 / Math.PI;
+      }
+      if (state.adj != null && state.hyp != null && state.angle == null) {
+        state.angle = Math.acos(state.adj / state.hyp) * 180 / Math.PI;
+      }
+      if (state.opp != null && state.hyp != null && state.angle == null) {
+        state.angle = Math.asin(state.opp / state.hyp) * 180 / Math.PI;
+      }
+    }
+
+    function storeSide(key) {
+      const inches = currentEntryInches();
+      if (key === 'adj') state.adj = inches;
+      if (key === 'opp') state.opp = inches;
+      if (key === 'hyp') state.hyp = inches;
+      if (key === 'angle') {
+        // treat plain number as degrees
+        state.angle = parseFloat(state.entry) || inches;
+      }
+      clearEntry();
+      solveTriangle();
+      showKey(key);
+      updateGuide();
+    }
+
+    function showKey(key) {
+      if (key === 'adj' && state.adj != null) {
+        updateDisplay(formatDim(state.adj), 'ADJ');
+        state.lastValue = state.adj;
+      } else if (key === 'opp' && state.opp != null) {
+        updateDisplay(formatDim(state.opp), 'OPP');
+        state.lastValue = state.opp;
+      } else if (key === 'hyp' && state.hyp != null) {
+        updateDisplay(formatDim(state.hyp), 'HYP');
+        state.lastValue = state.hyp;
+      } else if (key === 'angle' && state.angle != null) {
+        updateDisplay(formatAngle(state.angle), 'ANGLE');
+      } else {
+        updateDisplay('—', key.toUpperCase() + ' ?');
+      }
+    }
+
+    // ========== BUTTON HANDLERS ==========
+    function onNum(n) {
+      state.entry += n;
+      updateDisplay(state.entry || '0', 'ENTRY');
+    }
+
+    function onFeet() {
+      state.feet = parseFloat(state.entry) || 0;
+      state.entry = '';
+      state.mode = 'inch';
+      updateDisplay(formatDim(toInches(state.feet, state.inches, state.fracNum, state.fracDen)), 'FEET');
+    }
+
+    function onInch() {
+      state.inches = parseFloat(state.entry) || 0;
+      state.entry = '';
+      state.mode = 'frac';
+      updateDisplay(formatDim(toInches(state.feet, state.inches, state.fracNum, state.fracDen)), 'INCH');
+    }
+
+    function onFrac() {
+      if (!state.entry.includes('/')) {
+        if (state.entry) {
+          state.fracNum = parseInt(state.entry, 10) || 0;
+          state.entry = state.fracNum + '/';
+        } else {
+          state.entry = '/';
+        }
+      }
+      state.mode = 'frac';
+      updateDisplay(state.entry || '0/', 'FRACTION');
+    }
+
+    function doBasicOp(op) {
+      const cur = currentEntryInches();
+      if (state.pendingOp && (state.entry || state.feet || state.inches)) {
+        let a = state.lastValue, b = cur;
+        if (state.pendingOp === 'add') state.lastValue = a + b;
+        else if (state.pendingOp === 'sub') state.lastValue = a - b;
+        else if (state.pendingOp === 'mul') state.lastValue = a * b;
+        else if (state.pendingOp === 'div') state.lastValue = b !== 0 ? a / b : NaN;
+        updateDisplay(formatDim(state.lastValue), 'RESULT');
+      } else {
+        state.lastValue = cur || state.lastValue;
+      }
+      state.pendingOp = op === 'equals' ? null : op;
+      clearEntry();
+      if (op === 'equals') updateDisplay(formatDim(state.lastValue), 'RESULT');
+    }
+
+    function resetAll() {
+      clearEntry();
+      state.adj = state.opp = state.hyp = state.angle = null;
+      state.lastValue = 0;
+      state.pendingOp = null;
+      state.convArmed = false;
+      updateDisplay('0', 'READY');
+      updateGuide();
+    }
+
+    // ========== WIRE BUTTONS ==========
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const num = btn.dataset.num;
+        const action = btn.dataset.action;
+
+        if (num !== undefined) {
+          onNum(num);
+          return;
+        }
+
+        switch (action) {
+          case 'feet': onFeet(); break;
+          case 'inch': onInch(); break;
+          case 'frac': onFrac(); break;
+          case 'adj':  storeSide('adj'); break;
+          case 'opp':  storeSide('opp'); break;
+          case 'hyp':  storeSide('hyp'); break;
+          case 'angle': storeSide('angle'); break;
+
+          case 'sin':
+          case 'cos':
+          case 'tan': {
+            const val = parseFloat(state.entry) || state.lastValue;
+            const rad = val * Math.PI / 180;
+            let res;
+            if (action === 'sin') res = Math.sin(rad);
+            if (action === 'cos') res = Math.cos(rad);
+            if (action === 'tan') res = Math.tan(rad);
+            updateDisplay(res.toFixed(6), action.toUpperCase());
+            clearEntry();
+            break;
+          }
+
+          case 'sq': {
+            const v = currentEntryInches() || state.lastValue;
+            state.lastValue = v * v;
+            updateDisplay(formatDim(state.lastValue), 'x²');
+            clearEntry();
+            break;
+          }
+          case 'sqrt': {
+            const v = currentEntryInches() || state.lastValue;
+            state.lastValue = Math.sqrt(Math.abs(v));
+            updateDisplay(formatDim(state.lastValue), '√x');
+            clearEntry();
+            break;
+          }
+
+          case 'clear':
+            if (state.entry || state.feet || state.inches) {
+              clearEntry();
+              updateDisplay('0', 'ENTRY');
+            } else {
+              resetAll();
+            }
+            break;
+
+          case 'add': doBasicOp('add'); break;
+          case 'sub': doBasicOp('sub'); break;
+          case 'mul': doBasicOp('mul'); break;
+          case 'div': doBasicOp('div'); break;
+          case 'equals': doBasicOp('equals'); break;
+
+          case 'mplus':
+            state.memory += (currentEntryInches() || state.lastValue);
+            clearEntry();
+            updateDisplay(formatDim(state.memory), 'M+');
+            break;
+
+          case 'conv':
+            state.convArmed = !state.convArmed;
+            updateDisplay(state.convArmed ? 'CONV' : '0', state.convArmed ? 'CONV READY' : 'READY');
+            break;
+
+          // Placeholder for less-used keys
+          case 'yds':
+          case 'm':
+          case 'cm':
+          case 'mm':
+          case 'arc':
+          case 'diam':
+          case 'hex':
+          case 'dms':
+          case 'rcl':
+            updateDisplay('—', action.toUpperCase());
+            break;
+        }
+        updateGuide();
+      });
+    });
+
+    // Init
+    resetAll();
+  </script>
+</body>
+</html>
