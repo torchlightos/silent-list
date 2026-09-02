@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>MORSE STATION</title>
+<style>
+  :root {
+    --bg: #000; --fg: #39ff14; --dim: #1a7a0a; --warn: #ffb000;
+    --muted: #4a6a4a; --panel: #050805; --border: #1c3a1c; --rx: #3ec6ff;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px; line-height: 1.35;
+  }
+  body { padding: 12px 12px 48px; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 13px; letter-spacing: 0.28em; font-weight: 600; margin: 0 0 6px; }
+  .sub { color: var(--muted); font-size: 11px; margin-bottom: 12px; }
+  label { display: block; color: var(--dim); font-size: 11px; letter-spacing: 0.08em; margin: 8px 0 4px; text-transform: uppercase; }
+  textarea, .log {
+    width: 100%; min-height: 78px; resize: vertical;
+    background: var(--panel); color: var(--fg);
+    border: 1px solid var(--border); padding: 10px;
+    font: inherit; outline: none; white-space: pre-wrap; word-break: break-word;
+  }
+  .log { color: var(--rx); min-height: 96px; max-height: 220px; overflow: auto; }
+  textarea:focus { border-color: var(--fg); }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  button, .chip {
+    background: #061006; color: var(--fg);
+    border: 1px solid var(--border);
+    font: inherit; font-size: 12px; padding: 7px 10px; cursor: pointer;
+  }
+  button:active, .chip:active { background: #0d2a0d; }
+  button.primary { border-color: var(--fg); }
+  button.warn { color: var(--warn); border-color: #5a4000; }
+  button.rx { color: var(--rx); border-color: #1a4a66; }
+  button.rx.on { background: #04202c; border-color: var(--rx); }
+  .chip { font-size: 11px; padding: 5px 8px; color: var(--dim); }
+  .chip b { color: var(--fg); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .ctrl { margin: 0; }
+  .ctrl output { color: var(--fg); float: right; }
+  input[type=range] { width: 100%; accent-color: var(--fg); }
+  select {
+    width: 100%; background: var(--panel); color: var(--fg);
+    border: 1px solid var(--border); font: inherit; padding: 6px;
+  }
+  .meter-wrap { height: 10px; background: #0a0a0a; border: 1px solid var(--border); margin: 6px 0 2px; }
+  .meter { height: 100%; width: 0; background: var(--rx); }
+  .meter.mark { background: var(--fg); }
+  .flags { font-size: 11px; color: var(--muted); }
+  .flags .hot { color: var(--fg); }
+  .flags .rxhot { color: var(--rx); }
+  .status { margin-top: 6px; color: var(--muted); font-size: 11px; }
+  .hint { margin-top: 14px; color: var(--muted); font-size: 11px; }
+  .hint code { color: var(--dim); }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+  .tag { color: var(--warn); }
+</style>
+</head>
+<body>
+  <h1>MORSE STATION</h1>
+  <div class="sub">half-duplex air link · speaker TX · mic RX · mic muted while sending · you handle K / timing</div>
+
+  <label>TX message</label>
+  <textarea id="msg" spellcheck="false">CQ CQ DE TEST <AR> K</textarea>
+  <label>Prosigns</label>
+  <div class="row" id="prosigns"></div>
+  <div class="row">
+    <button class="primary" id="play">SEND</button>
+    <button class="warn" id="stopTx">STOP TX</button>
+    <button class="rx" id="listen">LISTEN</button>
+    <button id="clearRx">CLEAR RX</button>
+  </div>
+  <div class="flags" id="flags">TX idle · RX off</div>
+
+  <label>RX copy</label>
+  <div class="log" id="rxlog"></div>
+  <div class="meter-wrap"><div class="meter" id="meter"></div></div>
+  <div class="flags" id="raw">raw: —</div>
+
+  <hr>
+  <div class="grid">
+    <label class="ctrl">Char WPM <output id="oWpm">18</output>
+      <input id="wpm" type="range" min="5" max="40" step="1" value="18">
+    </label>
+    <label class="ctrl">Farnsworth WPM <output id="oFw">18</output>
+      <input id="fw" type="range" min="5" max="40" step="1" value="18">
+    </label>
+    <label class="ctrl">Tone Hz (TX + RX tune) <output id="oHz">600</output>
+      <input id="hz" type="range" min="400" max="1000" step="10" value="600">
+    </label>
+    <label class="ctrl">TX volume <output id="oVol">0.55</output>
+      <input id="vol" type="range" min="0" max="1" step="0.01" value="0.55">
+    </label>
+    <label class="ctrl">Rise/fall ms <output id="oEdge">5</output>
+      <input id="edge" type="range" min="1" max="16" step="0.5" value="5">
+    </label>
+    <label class="ctrl">RX sensitivity <output id="oSens">6.0</output>
+      <input id="sens" type="range" min="2" max="20" step="0.5" value="6">
+    </label>
+    <label class="ctrl">RX floor <output id="oFloor">0.004</output>
+      <input id="floor" type="range" min="0.0005" max="0.04" step="0.0005" value="0.004">
+    </label>
+    <label class="ctrl">Waveform
+      <select id="wave">
+        <option value="sine">sine</option>
+        <option value="triangle">triangle</option>
+        <option value="square">square</option>
+      </select>
+    </label>
+  </div>
+  <div class="status" id="status">set both phones to the same Hz and WPM · start LISTEN on the receive phone first</div>
+  <div class="hint">
+    Two phones through the air: phone B tap <code>LISTEN</code> (allow mic), hold speaker of phone A toward B’s mic, tap <code>SEND</code> on A.
+    Mic is hard-gated during TX on the same device so it will not copy itself.
+    Sync is manual: end a burst with <code>&lt;AR&gt; K</code> and wait for the other station to send.
+    Later: automate “wait for K / KN” then push the next file block.
+    Tokens: <code>&lt;KA&gt;</code> start · <code>&lt;AR&gt;</code> end msg · <code>&lt;K&gt;</code> go ahead · <code>&lt;KN&gt;</code> named go-ahead · <code>&lt;BT&gt;</code> break · <code>&lt;AS&gt;</code> wait · <code>&lt;SK&gt;</code> end work.
+    iOS: use Safari, HTTPS or a local file opened from Files may block mic — serve the file or drop it on a page you already host.
+  </div>
+
+<script>
+const ALPHA = {
+  A:".-", B:"-...", C:"-.-.", D:"-..", E:".", F:"..-.", G:"--.",
+  H:"....", I:"..", J:".---", K:"-.-", L:".-..", M:"--", N:"-.",
+  O:"---", P:".--.", Q:"--.-", R:".-.", S:"...", T:"-", U:"..-",
+  V:"...-", W:".--", X:"-..-", Y:"-.--", Z:"--..",
+  "0":"-----","1":".----","2":"..---","3":"...--","4":"....-",
+  "5":".....","6":"-....","7":"--...","8":"---..","9":"----.",
+  ".":".-.-.-", ",":"--..--", "?":"..--..", "!":"-.-.--",
+  "/":"-..-.", "-":"-....-", ":":"---...", ";":"-.-.-.",
+  "'":".----.", "\"":".-..-.", "@":".--.-.", "_":"..--.-"
+};
+const PRO = {
+  KA:"-.-.-", CT:"-.-.-", AA:".-.-", AR:".-.-.", SK:"...-.-", VA:"...-.-",
+  K:"-.-", KN:"-.--.", AS:".-...", BT:"-...-", BK:"-...-.-",
+  SN:"...-.", VE:"...-.", HH:"........", SOS:"...---...", CL:"-.-..-.."
+};
+const PUNCT_AS_PRO = { "+":"AR", "=":"BT", "&":"AS", "(":"KN" };
+const PRO_META = [
+  ["KA","start"],["AR","end msg"],["K","go ahead"],["KN","named GA"],
+  ["BT","break"],["AS","wait"],["SK","end work"],["SN","understood"],["SOS","distress"]
+];
+
+const DECODE = Object.create(null);
+Object.keys(ALPHA).forEach(k => { DECODE[ALPHA[k]] = k; });
+["AR","SK","KA","KN","BT","AS","SOS","HH","BK","SN","AA","CL"].forEach(k => {
+  DECODE[PRO[k]] = "<" + k + ">";
+});
+DECODE["-.-"] = "K";
+
+const $ = id => document.getElementById(id);
+const msgEl = $("msg");
+PRO_META.forEach(([code, meaning]) => {
+  const b = document.createElement("button");
+  b.className = "chip";
+  b.innerHTML = `<b>&lt;${code}&gt;</b> ${meaning}`;
+  b.onclick = () => insert(`<${code}> `);
+  $("prosigns").appendChild(b);
+});
+function insert(s) {
+  const t = msgEl;
+  const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? t.value.length;
+  t.value = t.value.slice(0, a) + s + t.value.slice(b);
+  t.selectionStart = t.selectionEnd = a + s.length;
+  t.focus();
+}
+function bindOut(id, oid, fmt) {
+  const el = $(id), out = $(oid);
+  const sync = () => { out.textContent = fmt ? fmt(el.value) : el.value; };
+  el.addEventListener("input", sync); sync();
+}
+bindOut("wpm","oWpm"); bindOut("fw","oFw"); bindOut("hz","oHz");
+bindOut("vol","oVol", v => Number(v).toFixed(2));
+bindOut("edge","oEdge");
+bindOut("sens","oSens", v => Number(v).toFixed(1));
+bindOut("floor","oFloor", v => Number(v).toFixed(4));
+$("wpm").addEventListener("input", () => {
+  if (+$("fw").value > +$("wpm").value) $("fw").value = $("wpm").value;
+  $("oFw").textContent = $("fw").value;
+});
+$("fw").addEventListener("input", () => {
+  if (+$("fw").value > +$("wpm").value) $("fw").value = $("wpm").value;
+  $("oFw").textContent = $("fw").value;
+});
+
+function tokenize(text) {
+  const tokens = [];
+  const re = /<([A-Z]+)>|(\s+)|(.)/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m[1]) {
+      const name = m[1].toUpperCase();
+      tokens.push(PRO[name] ? { type:"pro", name, code: PRO[name] } : { type:"text", ch:m[0], code:null });
+    } else if (m[2]) tokens.push({ type:"word" });
+    else {
+      const raw = m[3];
+      if (PUNCT_AS_PRO[raw] && PRO[PUNCT_AS_PRO[raw]]) {
+        const name = PUNCT_AS_PRO[raw];
+        tokens.push({ type:"pro", name, code: PRO[name] });
+      } else {
+        const ch = raw.toUpperCase();
+        tokens.push({ type:"text", ch: raw, code: ALPHA[ch] || null });
+      }
+    }
+  }
+  return tokens;
+}
+function timings() {
+  const wpm = Math.max(5, +$("wpm").value);
+  let fw = Math.max(5, +$("fw").value);
+  if (fw > wpm) fw = wpm;
+  const dit = 1200 / wpm;
+  const tChar = 50 * dit, tEff = 60000 / fw;
+  const extra = Math.max(0, tEff - tChar);
+  const stretchUnit = extra / 19;
+  return {
+    dit,
+    intra: 1,
+    letterGap: 3 * dit + 12 * stretchUnit,
+    wordGap: 7 * dit + 7 * stretchUnit,
+    wpm, fw
+  };
+}
+function schedule(tokens, t) {
+  const events = [];
+  let tms = 0;
+  tokens.forEach((tok) => {
+    if (tok.type === "word") { tms += t.wordGap; return; }
+    if (!tok.code) return;
+    const bits = tok.code.split("");
+    bits.forEach((b, j) => {
+      const dur = (b === "-" ? 3 : 1) * t.dit;
+      events.push({ startMs: tms, durMs: dur });
+      tms += dur;
+      if (j < bits.length - 1) tms += t.dit;
+    });
+    tms += t.letterGap;
+  });
+  return { events, totalMs: tms };
+}
+
+/* ---------- audio graph ---------- */
+let ctx = null, master = null, micGain = null, analyser = null, stream = null;
+let txBusy = false, listening = false, pollId = 0, txTimers = [];
+
+function ac() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = 1;
+    master.connect(ctx.destination);
+    micGain = ctx.createGain();
+    micGain.gain.value = 0;
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0;
+    micGain.connect(analyser);
+  }
+  if (ctx.state === "suspended") ctx.resume();
+  return ctx;
+}
+function setMicLive(on) {
+  if (micGain) micGain.gain.value = on ? 1 : 0;
+}
+
+function tone(start, dur) {
+  const a = ac();
+  const osc = a.createOscillator();
+  const g = a.createGain();
+  osc.type = $("wave").value;
+  osc.frequency.value = +$("hz").value;
+  const edge = Math.min(+$("edge").value / 1000, dur * 0.35);
+  const t0 = a.currentTime + start;
+  const vol = +$("vol").value;
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(vol, t0 + edge);
+  g.gain.setValueAtTime(vol, t0 + dur - edge);
+  g.gain.linearRampToValueAtTime(0, t0 + dur);
+  osc.connect(g); g.connect(master);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.02);
+}
+
+function flags() {
+  const tx = txBusy ? "TX ON" : "TX idle";
+  const rx = !listening ? "RX off" : (txBusy ? "RX gated" : "RX live");
+  $("flags").innerHTML =
+    `<span class="${txBusy ? "hot":""}">${tx}</span> · <span class="${listening && !txBusy ? "rxhot":""}">${rx}</span>`;
+}
+
+function send() {
+  stopTx(false);
+  const tokens = tokenize(msgEl.value);
+  const t = timings();
+  const { events, totalMs } = schedule(tokens, t);
+  if (!events.length) { $("status").textContent = "nothing to send"; return; }
+  ac();
+  txBusy = true;
+  setMicLive(false);
+  flags();
+  events.forEach(e => tone(e.startMs / 1000, e.durMs / 1000));
+  const hang = 180;
+  txTimers.push(setTimeout(() => {
+    txBusy = false;
+    if (listening) setMicLive(true);
+    flags();
+    $("status").textContent = "TX done · RX " + (listening ? "live" : "off") + " · wait for K manually";
+    resetDecoder(true);
+  }, totalMs + hang));
+  $("status").textContent = `sending ${totalMs|0} ms · dit ${t.dit.toFixed(0)} ms · mic gated`;
+}
+
+function stopTx(update) {
+  txTimers.forEach(clearTimeout); txTimers = [];
+  txBusy = false;
+  if (listening) setMicLive(true);
+  if (update !== false) flags();
+}
+
+$("play").onclick = send;
+$("stopTx").onclick = () => { stopTx(); $("status").textContent = "TX stopped"; };
+
+/* ---------- RX ---------- */
+const td = new Float32Array(512);
+let mark = false;
+let lastT = 0;
+let runStart = 0;
+let letter = "";
+let noise = 0.001;
+let ditEst = 60;
+let rawBits = "";
+
+function goertzel(buf, sr, freq) {
+  const n = buf.length;
+  const k = Math.round((n * freq) / sr);
+  const w = (2 * Math.PI * k) / n;
+  const coeff = 2 * Math.cos(w);
+  let q0 = 0, q1 = 0, q2 = 0;
+  for (let i = 0; i < n; i++) {
+    q0 = coeff * q1 - q2 + buf[i];
+    q2 = q1; q1 = q0;
+  }
+  const real = q1 - q2 * Math.cos(w);
+  const imag = q2 * Math.sin(w);
+  return Math.hypot(real, imag) / n;
+}
+
+function resetDecoder(soft) {
+  mark = false;
+  letter = "";
+  rawBits = "";
+  lastT = performance.now();
+  runStart = lastT;
+  if (!soft) {
+    $("rxlog").textContent = "";
+    $("raw").textContent = "raw: —";
+  }
+}
+
+function appendRx(s) {
+  const el = $("rxlog");
+  el.textContent += s;
+  el.scrollTop = el.scrollHeight;
+}
+
+function flushLetter() {
+  if (!letter) return;
+  const g = DECODE[letter];
+  appendRx(g ? g : "{" + letter + "}");
+  if (g === "<K>" || g === "K") appendRx(" ¶GA ");
+  letter = "";
+}
+
+function onRun(isMark, ms) {
+  if (isMark) {
+    const unit = ditEst;
+    const bit = ms < unit * 2.0 ? "." : "-";
+    letter += bit;
+    rawBits += bit;
+    if (bit === "." && ms > 20) ditEst = ditEst * 0.7 + ms * 0.3;
+    if (bit === "-" && ms > 40) ditEst = ditEst * 0.85 + (ms / 3) * 0.15;
+    ditEst = Math.min(240, Math.max(25, ditEst));
+  } else {
+    if (ms >= ditEst * 6.2) {
+      flushLetter();
+      appendRx(" ");
+      rawBits += " / ";
+    } else if (ms >= ditEst * 2.2) {
+      flushLetter();
+      rawBits += " ";
+    }
+  }
+  $("raw").textContent = "raw: " + rawBits.slice(-72) + " · dit~" + ditEst.toFixed(0) + "ms";
+}
+
+function poll() {
+  if (!listening || !analyser || txBusy) {
+    $("meter").style.width = "0%";
+    return;
+  }
+  analyser.getFloatTimeDomainData(td);
+  const mag = goertzel(td, ctx.sampleRate, +$("hz").value);
+  noise = noise * 0.98 + mag * 0.02;
+  const thresh = Math.max(+$("floor").value, noise * +$("sens").value);
+  const now = performance.now();
+  const isMark = mag > thresh;
+  const level = Math.min(1, mag / (thresh * 3));
+  $("meter").style.width = (level * 100) + "%";
+  $("meter").classList.toggle("mark", isMark);
+
+  if (isMark !== mark) {
+    const dur = now - runStart;
+    if (dur > 12) onRun(mark, dur);
+    mark = isMark;
+    runStart = now;
+  } else if (!isMark && letter && (now - runStart) > ditEst * 8) {
+    onRun(false, now - runStart);
+    runStart = now;
+  }
+  lastT = now;
+}
+
+async function listenToggle() {
+  if (listening) {
+    listening = false;
+    setMicLive(false);
+    if (pollId) { clearInterval(pollId); pollId = 0; }
+    $("listen").classList.remove("on");
+    $("listen").textContent = "LISTEN";
+    flags();
+    $("status").textContent = "RX off";
+    return;
+  }
+  try {
+    ac();
+    if (!stream) {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 1
+        }
+      });
+      const src = ctx.createMediaStreamSource(stream);
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = +$("hz").value;
+      bp.Q.value = 8;
+      $("hz").addEventListener("input", () => { bp.frequency.value = +$("hz").value; });
+      src.connect(bp);
+      bp.connect(micGain);
+    }
+    listening = true;
+    resetDecoder(true);
+    ditEst = 1200 / Math.max(5, +$("wpm").value);
+    if (!txBusy) setMicLive(true);
+    if (!pollId) pollId = setInterval(poll, 8);
+    $("listen").classList.add("on");
+    $("listen").textContent = "LISTEN ON";
+    flags();
+    $("status").textContent = "RX live · aim other phone speaker at this mic · same Hz";
+  } catch (err) {
+    $("status").textContent = "mic denied: " + err.message;
+  }
+}
+
+$("listen").onclick = listenToggle;
+$("clearRx").onclick = () => resetDecoder(false);
+
+window.addEventListener("pagehide", () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+});
+</script>
+</body>
+</html>
