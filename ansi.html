@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UTF-8 BitMatrix Engine - Lab V3</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --panel-bg: #0f172a;
+            --panel-border: #1e293b;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-pink: #ec4899;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(2, 6, 23, 0.8);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--panel-border);
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+
+        .cyber-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .cyber-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .osc-box {
+            background: rgba(2, 6, 23, 0.6);
+            border-left: 3px solid var(--accent-purple);
+            padding: 4px 8px;
+            border-radius: 0 6px 6px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            font-size: 10px;
+        }
+
+        /* Interactive Viewport Display */
+        .viewport-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        #ascii-output, #animator-output {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 9px;
+            line-height: 1;
+            white-space: pre;
+            background: #000;
+            color: #fff;
+            transform-origin: center center;
+            cursor: grab;
+        }
+
+        #ascii-output:active, #animator-output:active {
+            cursor: grabbing;
+        }
+
+        .hidden-canvas {
+            display: none !important;
+        }
+
+        /* Range Slider Styling */
+        input[type="range"] {
+            accent-color: var(--accent-cyan);
+        }
+
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--accent-cyan);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            animation: fadeIn 0.2s ease-out forwards;
+            pointer-events: auto;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- MAIN NAVIGATION HEADER -->
+    <header class="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 z-50 flex-shrink-0 h-10">
+        <div class="flex items-center gap-1.5">
+            <button onclick="switchView(1)" id="tab-btn-1" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition active-tab">1: Glyph DB</button>
+            <button onclick="switchView(2)" id="tab-btn-2" class="px-2.5 py-1 text-xs rounded bg-cyan-500 text-black font-bold hover:bg-cyan-400 transition">2: Live Studio</button>
+            <button onclick="switchView(3)" id="tab-btn-3" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-purple-400 font-bold hover:bg-slate-700 transition">3: Timeline</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-cyan-400 tracking-wider hidden sm:inline">UTF-8 BITMATRIX LAB V3</span>
+            <span id="global-status-badge" class="cyber-badge bg-emerald-950 text-emerald-400 border border-emerald-800">Engine Ready</span>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+            <button onclick="toggleHelpModal()" class="w-7 h-7 bg-slate-800 text-cyan-400 border border-cyan-500/40 rounded flex items-center justify-center font-bold text-xs hover:bg-cyan-500 hover:text-black transition" title="Help Guide">?</button>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-hidden relative flex flex-col p-2">
+        
+        <!-- VIEW 1: MATRIX RASTERIZER & GLYPH DATABASE -->
+        <div id="view-1" class="hidden flex-col gap-3 w-full h-full overflow-y-auto">
+            <div class="cyber-card p-3 flex flex-col gap-2">
+                <div class="flex justify-between items-center text-xs font-bold text-cyan-400 uppercase tracking-widest">
+                    <span>Font Matrix Glyph Scanner</span>
+                    <span id="scan-stats" class="text-slate-400 text-[10px]">Ready</span>
+                </div>
+                
+                <div class="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <input type="text" id="custom-chars" value=" ░▒▓█▀▄▌▐■□▲▼◄►0123456789" class="flex-1 bg-slate-950 text-slate-100 border border-slate-800 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-cyan-500">
+                    <button onclick="runMatrixScan()" class="px-3 py-1 bg-cyan-500 text-black font-bold text-xs rounded hover:bg-cyan-400 transition">Rescan Set</button>
+                </div>
+
+                <!-- Quick Glyph Set Presets -->
+                <div class="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-800 text-[10px]">
+                    <span class="text-slate-400 font-bold">Presets:</span>
+                    <button onclick="loadGlyphPreset('dense')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Dense Blocks</button>
+                    <button onclick="loadGlyphPreset('ascii')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Standard ASCII</button>
+                    <button onclick="loadGlyphPreset('cyber')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Cyber Matrix</button>
+                    <button onclick="loadGlyphPreset('braille')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Braille Set</button>
+                    <button onclick="loadGlyphPreset('kanji')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Katakana</button>
+                </div>
+            </div>
+
+            <div class="cyber-card p-3 flex-1 flex flex-col gap-2 min-h-[250px]">
+                <div class="flex justify-between items-center text-xs font-bold text-cyan-400 uppercase tracking-widest">
+                    <span>Sorted Luminance Database</span>
+                    <span id="db-count" class="text-slate-400 text-[10px]">0 Glyphs</span>
+                </div>
+                <input type="text" id="db-search" placeholder="Search glyph or density..." oninput="filterDB()" class="bg-slate-950 border border-slate-800 text-slate-100 px-2 py-1 rounded text-xs focus:outline-none focus:border-cyan-500">
+                
+                <div id="db-results-container" class="flex-1 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-2 text-xs flex flex-col gap-1 min-h-[180px]">
+                    <div class="text-center py-8 text-slate-500">Scanning font metrics...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: COMPACT MEDIA CONTROL BAR & LIVE STUDIO VIEWPORT -->
+        <div id="view-2" class="flex flex-col gap-2 w-full h-full overflow-hidden">
+            
+            <!-- Compact Studio Control Deck -->
+            <div class="cyber-card p-2 flex flex-col gap-2 flex-shrink-0">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    
+                    <!-- Input Source Selectors -->
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded border border-slate-800 text-xs">
+                        <label class="flex items-center gap-1 text-slate-200 cursor-pointer px-1" title="Toggle Engine Signal Processing">
+                            <input type="checkbox" id="master-osc" checked onchange="toggleMasterEngine()" class="accent-cyan-500">
+                            <span class="font-bold text-[11px]">ENG</span>
+                        </label>
+                        
+                        <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
+                        
+                        <button onclick="document.getElementById('img-upload').click()" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-bold" title="Upload Image">🖼️ Image</button>
+                        <button onclick="document.getElementById('video-upload').click()" class="px-2 py-0.5 bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-600/40 rounded text-[11px] font-bold" title="Upload MP4 Video">🎬 Video</button>
+                        <button id="webcam-btn" onclick="toggleWebcam()" class="px-2 py-0.5 bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-600/40 rounded text-[11px] font-bold" title="Toggle Live Webcam Feed">📹 Cam</button>
+                        <button id="audio-btn" onclick="toggleAudioSynth()" class="px-2 py-0.5 bg-amber-900/60 hover:bg-amber-800 text-amber-200 border border-amber-600/40 rounded text-[11px] font-bold" title="Audio Waveform Synthesizer">🎵 Audio</button>
+
+                        <input type="file" id="img-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                        <input type="file" id="video-upload" accept="video/mp4,video/webm" class="hidden" onchange="handleVideoUpload(event)">
+                    </div>
+
+                    <!-- Visual Presets -->
+                    <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded border border-slate-800 text-xs">
+                        <button onclick="loadPreset('gradient')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Grad</button>
+                        <button onclick="loadPreset('noise')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Noise</button>
+                        <button onclick="loadPreset('shapes')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Shapes</button>
+                        <button onclick="loadPreset('matrix')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded text-[10px] font-bold">Matrix Rain</button>
+                    </div>
+
+                    <!-- Lab Phase Modules & Color Themes -->
+                    <div class="flex items-center gap-2 bg-slate-950/80 p-1 rounded border border-slate-800 text-xs">
+                        <div class="flex items-center gap-1 text-[10px]">
+                            <label class="flex items-center gap-0.5 text-cyan-400 cursor-pointer" title="Tri-State Luminance Quantizer">
+                                <input type="checkbox" id="lab-1-chk" class="accent-cyan-500"> 1
+                            </label>
+                            <label class="flex items-center gap-0.5 text-cyan-400 cursor-pointer" title="Venn Target High-Error Mesh">
+                                <input type="checkbox" id="lab-2-chk" class="accent-cyan-500"> 2
+                            </label>
+                            <label class="flex items-center gap-0.5 text-cyan-400 cursor-pointer" title="V8 Harmonic Phase Stagger">
+                                <input type="checkbox" id="lab-3-chk" class="accent-cyan-500"> 3
+                            </label>
+                        </div>
+
+                        <div class="h-4 w-px bg-slate-800"></div>
+
+                        <!-- Color Mode Palette Selector -->
+                        <div class="flex items-center gap-1">
+                            <span class="text-[10px] text-amber-400">🎨 Palette:</span>
+                            <select id="color-palette-select" onchange="updateColorPalette()" class="bg-slate-900 border border-slate-700 text-slate-200 text-[10px] rounded px-1 py-0.5 focus:outline-none">
+                                <option value="mono">Monochrome (B&W)</option>
+                                <option value="rgb">Full RGB Direct</option>
+                                <option value="matrix">Matrix Cyber Green</option>
+                                <option value="amber">Amber CRT Retro</option>
+                                <option value="synthwave">Synthwave Neon</option>
+                                <option value="monokai">Monokai Dark</option>
+                                <option value="gameboy">Retro GameBoy</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Collapsible Micro Oscillators Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1 border-t border-slate-800/80">
+                    <!-- Contrast Osc -->
+                    <div class="osc-box" style="border-left-color: var(--accent-purple);">
+                        <label class="flex items-center gap-1 text-slate-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="osc-en-contrast" onchange="updateOscSettings('contrast')"> Con
+                        </label>
+                        <input type="range" id="param-contrast" min="0.1" max="3" step="0.1" value="1" oninput="updateBaseParam('contrast')" class="w-16">
+                        <select id="osc-mode-contrast" class="bg-slate-900 border border-slate-800 text-[9px] rounded px-1" onchange="updateOscSettings('contrast')">
+                            <option value="pingpong">Ping</option>
+                            <option value="sawtooth">Saw</option>
+                        </select>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded">
+                            <button onclick="adjustOscSpeed('contrast', -0.5)" class="px-1 text-slate-400 hover:text-white font-bold">-</button>
+                            <span id="speed-contrast" class="w-6 text-center text-[9px] text-cyan-400 font-bold">1x</span>
+                            <button onclick="adjustOscSpeed('contrast', 0.5)" class="px-1 text-slate-400 hover:text-white font-bold">+</button>
+                        </div>
+                    </div>
+
+                    <!-- Brightness Osc -->
+                    <div class="osc-box" style="border-left-color: var(--accent-cyan);">
+                        <label class="flex items-center gap-1 text-slate-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="osc-en-brightness" onchange="updateOscSettings('brightness')"> Bri
+                        </label>
+                        <input type="range" id="param-brightness" min="-100" max="100" step="1" value="0" oninput="updateBaseParam('brightness')" class="w-16">
+                        <select id="osc-mode-brightness" class="bg-slate-900 border border-slate-800 text-[9px] rounded px-1" onchange="updateOscSettings('brightness')">
+                            <option value="pingpong">Ping</option>
+                            <option value="sawtooth">Saw</option>
+                        </select>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded">
+                            <button onclick="adjustOscSpeed('brightness', -0.5)" class="px-1 text-slate-400 hover:text-white font-bold">-</button>
+                            <span id="speed-brightness" class="w-6 text-center text-[9px] text-cyan-400 font-bold">1x</span>
+                            <button onclick="adjustOscSpeed('brightness', 0.5)" class="px-1 text-slate-400 hover:text-white font-bold">+</button>
+                        </div>
+                    </div>
+
+                    <!-- Resolution/Cols Osc -->
+                    <div class="osc-box" style="border-left-color: var(--accent-emerald);">
+                        <label class="flex items-center gap-1 text-slate-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="osc-en-cols" onchange="updateOscSettings('cols')"> Res
+                        </label>
+                        <input type="range" id="param-cols" min="20" max="120" step="2" value="65" oninput="updateBaseParam('cols')" class="w-16">
+                        <select id="osc-mode-cols" class="bg-slate-900 border border-slate-800 text-[9px] rounded px-1" onchange="updateOscSettings('cols')">
+                            <option value="pingpong">Ping</option>
+                            <option value="sawtooth">Saw</option>
+                        </select>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded">
+                            <button onclick="adjustOscSpeed('cols', -0.5)" class="px-1 text-slate-400 hover:text-white font-bold">-</button>
+                            <span id="speed-cols" class="w-6 text-center text-[9px] text-cyan-400 font-bold">1x</span>
+                            <button onclick="adjustOscSpeed('cols', 0.5)" class="px-1 text-slate-400 hover:text-white font-bold">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Viewport Container with Drag/Pan & Touch Interactivity -->
+            <div class="flex-1 flex flex-col min-h-0 relative">
+                <div class="flex justify-between items-center px-2 py-1 bg-slate-950 text-[10px] border border-b-0 border-slate-800 rounded-t-lg">
+                    <div class="flex items-center gap-2">
+                        <span class="text-cyan-400 font-bold">Live Matrix Viewport</span>
+                        <span id="dimension-indicator" class="text-slate-500 font-mono">(65 cols)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="fps-counter" class="text-emerald-400 font-mono font-bold">0 FPS</span>
+                    </div>
+                </div>
+
+                <div class="viewport-container" id="dither-viewport" 
+                     onwheel="handleZoom(event, 'ascii-output')" 
+                     onmousedown="startPan(event, 'ascii-output')" 
+                     onmousemove="doPan(event, 'ascii-output')" 
+                     onmouseup="endPan()" 
+                     onmouseleave="endPan()" 
+                     ontouchstart="startPanTouch(event, 'ascii-output')" 
+                     ontouchmove="doPanTouch(event, 'ascii-output')" 
+                     ontouchend="endPan()">
+                    
+                    <div id="ascii-output"></div>
+
+                    <!-- On-Screen Viewport Touch Control Overlay -->
+                    <div class="absolute bottom-3 right-3 flex flex-col gap-1 z-20">
+                        <button onclick="zoomStep('ascii-output', 0.2)" class="w-7 h-7 bg-slate-900/80 hover:bg-slate-800 text-cyan-400 border border-slate-700 rounded-full flex items-center justify-center font-bold text-sm shadow-lg">+</button>
+                        <button onclick="zoomStep('ascii-output', -0.2)" class="w-7 h-7 bg-slate-900/80 hover:bg-slate-800 text-cyan-400 border border-slate-700 rounded-full flex items-center justify-center font-bold text-sm shadow-lg">-</button>
+                        <button onclick="resetTransform('ascii-output')" class="w-7 h-7 bg-slate-900/80 hover:bg-slate-800 text-purple-400 border border-slate-700 rounded-full flex items-center justify-center font-bold text-[10px] shadow-lg" title="Reset Scale/Pan">RESET</button>
+                    </div>
+                </div>
+
+                <!-- Viewport Footer Action Bar -->
+                <div class="flex gap-2 pt-2 bg-slate-950 flex-shrink-0">
+                    <button onclick="stampCurrentFrame()" class="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded transition flex items-center justify-center gap-1">
+                        <span>📸 Stamp Frame</span>
+                        <span class="bg-purple-900/80 px-1.5 py-0.5 rounded text-[10px]" id="frame-count">0</span>
+                    </button>
+                    <button onclick="copyAsciiToClipboard()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs rounded border border-slate-700">Copy Text</button>
+                    <button onclick="exportFrameAsPNG()" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded">Export PNG</button>
+                    <button onclick="resetTransform('ascii-output')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded">Recenter</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: ANIMATOR TIMELINE & MULTI-FORMAT EXPORTER -->
+        <div id="view-3" class="hidden flex-col gap-2 w-full h-full overflow-hidden">
+            <div class="cyber-card p-2 flex flex-col gap-2 flex-shrink-0">
+                <div class="flex justify-between items-center text-xs font-bold text-purple-400 uppercase tracking-widest">
+                    <span>Frame Buffer Timeline & Exporter</span>
+                    <span id="animator-status" class="text-slate-400 text-[10px]">Buffer Idle</span>
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="toggleAnimatorPlay()" id="animator-play-btn" class="px-3 py-1 bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-xs rounded transition">▶ Play Stream</button>
+                    
+                    <div class="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded border border-slate-800 text-xs">
+                        <span class="text-slate-400 text-[10px]">FPS Delay:</span>
+                        <input type="range" id="animator-speed" min="20" max="300" step="10" value="60" onchange="updateAnimatorSpeed()" class="w-20">
+                        <span id="animator-speed-val" class="text-cyan-400 font-mono text-[10px]">60ms</span>
+                    </div>
+
+                    <div class="h-4 w-px bg-slate-800"></div>
+
+                    <!-- Exporters -->
+                    <button onclick="exportAnsiStream('ps1')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded" title="PowerShell ANSI Script Exporter">Export PS1</button>
+                    <button onclick="exportAnsiStream('sh')" class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs rounded" title="Bash ANSI Shell Exporter">Export Shell</button>
+                    <button onclick="exportRawTextSequence()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs rounded border border-slate-700">Export TXT</button>
+                    <button onclick="clearFrames()" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 text-rose-300 border border-rose-700/40 font-bold text-xs rounded">Clear Buffer</button>
+                </div>
+            </div>
+
+            <!-- Animator Timeline Visualizer -->
+            <div class="cyber-card p-2 flex-1 flex flex-col min-h-0">
+                <div class="flex justify-between items-center px-2 py-1 bg-slate-950 text-[10px] border border-b-0 border-slate-800 rounded-t-lg">
+                    <span class="text-purple-400 font-bold">Playback Viewport</span>
+                    <span id="timeline-index" class="text-slate-400 font-mono">Frame 0 / 0</span>
+                </div>
+
+                <div class="viewport-container" id="animator-viewport"
+                     onwheel="handleZoom(event, 'animator-output')" 
+                     onmousedown="startPan(event, 'animator-output')" 
+                     onmousemove="doPan(event, 'animator-output')" 
+                     onmouseup="endPan()" 
+                     onmouseleave="endPan()">
+                    <div id="animator-output">Upload video or click "Stamp Frame" in Live Studio to record sequence.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- OFFSCREEN WORKING CANVASES & VIDEO ELEMENTS -->
+    <canvas id="hidden-canvas" class="hidden-canvas"></canvas>
+    <canvas id="source-img-canvas" class="hidden-canvas"></canvas>
+    <video id="source-video" class="hidden-canvas" muted playsinline></video>
+    <video id="webcam-video" class="hidden-canvas" autoplay muted playsinline></video>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toast-container"></div>
+
+    <!-- HELP / DOCUMENTATION MODAL -->
+    <div id="help-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[1000] justify-center items-center p-4" onclick="toggleHelpModal()">
+        <div class="cyber-card p-4 max-w-md w-full flex flex-col gap-3 text-xs" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <span class="text-sm font-bold text-cyan-400 uppercase tracking-wider">UTF-8 Lab V3 Reference Guide</span>
+                <button onclick="toggleHelpModal()" class="text-slate-400 hover:text-white font-bold text-base">✕</button>
+            </div>
+            <div class="flex flex-col gap-2 text-slate-300 leading-relaxed max-h-[70vh] overflow-y-auto pr-1">
+                <p><strong class="text-cyan-400">View 1 (Glyph DB):</strong> Scans system fonts and custom Unicode glyph arrays to build sorted density lookups.</p>
+                <p><strong class="text-cyan-400">View 2 (Live Studio):</strong> Real-time engine with image, MP4 video, live webcam feed, or audio synthesizer waveform inputs. Tweak contrast, brightness, resolution oscillators, color palettes, and experimental lab phase options.</p>
+                <p><strong class="text-cyan-400">View 3 (Timeline):</strong> Frame buffer for video slicing and manual snapshots. Export streams into runnable PowerShell (.ps1), Bash (.sh), or text files.</p>
+                <p><strong class="text-cyan-400">Touch & Viewport Controls:</strong> Pinch/drag or scroll directly over the viewport to pan and zoom smoothly.</p>
+            </div>
+            <button onclick="toggleHelpModal()" class="mt-2 w-full py-1.5 bg-cyan-500 text-black font-bold rounded hover:bg-cyan-400 transition">Close Guide</button>
+        </div>
+    </div>
+
+    <script>
+        let currentView = 2;
+        let unicodeDatabase = [];
+        let sourceImage = null;
+        let sourceVideoEl = null;
+        let webcamStream = null;
+        let isWebcamActive = false;
+        
+        let isAudioSynthActive = false;
+        let audioCtx = null;
+        let audioAnalyser = null;
+        let audioDataArray = null;
+
+        let isEngineRunning = true;
+        let engineAnimationFrame = null;
+        let lastFrameTime = 0;
+        let fps = 0;
+        
+        let selectedPalette = 'mono';
+        let permanentFrames = [];
+        let isAnimatorPlaying = false;
+        let animatorIndex = 0;
+        let animatorInterval = null;
+        let animatorSpeedMs = 60;
+        
+        let transformState = {
+            'ascii-output': { scale: 1, x: 0, y: 0 },
+            'animator-output': { scale: 1, x: 0, y: 0 }
+        };
+
+        const oscillators = {
+            contrast: { base: 1.0, val: 1.0, speed: 1.0, mode: 'pingpong', sweep: 0.5, enabled: false },
+            brightness: { base: 0, val: 0, speed: 1.0, mode: 'pingpong', sweep: 25, enabled: false },
+            cols: { base: 65, val: 65, speed: 1.0, mode: 'pingpong', sweep: 20, enabled: false }
+        };
+
+        window.onload = () => {
+            runMatrixScan();
+            loadPreset('gradient');
+            switchView(2);
+            requestAnimationFrame(engineLoop);
+        };
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        function switchView(viewNum) {
+            document.getElementById(`view-1`).classList.add('hidden');
+            document.getElementById(`view-2`).classList.add('hidden');
+            document.getElementById(`view-3`).classList.add('hidden');
+            
+            document.getElementById(`tab-btn-1`).className = "px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition";
+            document.getElementById(`tab-btn-2`).className = "px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition";
+            document.getElementById(`tab-btn-3`).className = "px-2.5 py-1 text-xs rounded bg-slate-800 text-purple-400 font-bold hover:bg-slate-700 transition";
+
+            document.getElementById(`view-${viewNum}`).classList.remove('hidden');
+            document.getElementById(`view-${viewNum}`).classList.add('flex');
+
+            if(viewNum === 1) document.getElementById(`tab-btn-1`).className = "px-2.5 py-1 text-xs rounded bg-cyan-500 text-black font-bold hover:bg-cyan-400 transition";
+            if(viewNum === 2) document.getElementById(`tab-btn-2`).className = "px-2.5 py-1 text-xs rounded bg-cyan-500 text-black font-bold hover:bg-cyan-400 transition";
+            if(viewNum === 3) document.getElementById(`tab-btn-3`).className = "px-2.5 py-1 text-xs rounded bg-purple-600 text-white font-bold hover:bg-purple-500 transition";
+
+            currentView = viewNum;
+            if(viewNum !== 3 && isAnimatorPlaying) stopAnimator();
+        }
+
+        function toggleHelpModal() {
+            let m = document.getElementById('help-modal');
+            m.classList.toggle('hidden');
+            m.classList.toggle('flex');
+        }
+
+        function runMatrixScan() {
+            unicodeDatabase = [];
+            const chars = document.getElementById('custom-chars').value || " ░▒▓█";
+            const canvas = document.getElementById('hidden-canvas');
+            canvas.width = 10; canvas.height = 14;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+            for(let i = 0; i < chars.length; i++) {
+                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 10, 14);
+                ctx.fillStyle = '#fff'; ctx.font = '12px monospace'; 
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(chars[i], 5, 7);
+                
+                let imgData = ctx.getImageData(0, 0, 10, 14).data;
+                let density = 0;
+                for(let p = 0; p < imgData.length; p += 4) {
+                    if(imgData[p] > 128) density++;
+                }
+                let pct = (density / 140) * 100;
+                unicodeDatabase.push({ char: chars[i], density: pct });
+            }
+            unicodeDatabase.sort((a, b) => a.density - b.density);
+            document.getElementById('scan-stats').innerText = `Scanned ${unicodeDatabase.length} glyphs`;
+            document.getElementById('db-count').innerText = `${unicodeDatabase.length} Items`;
+            renderDBTable(unicodeDatabase);
+        }
+
+        function loadGlyphPreset(type) {
+            let input = document.getElementById('custom-chars');
+            if(type === 'dense') input.value = " ░▒▓█▀▄▌▐■□▲▼◄►";
+            else if(type === 'ascii') input.value = " .:-=+*#%@";
+            else if(type === 'cyber') input.value = " 01./\\|<>[]{}*+#-=";
+            else if(type === 'braille') input.value = " ⠁⠂⠄⠌⠔⠤⠶⠿⣿";
+            else if(type === 'kanji') input.value = " ﾆﾊﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘ";
+            runMatrixScan();
+            showToast(`Loaded ${type.toUpperCase()} glyph set`);
+        }
+
+        function renderDBTable(data) {
+            let container = document.getElementById('db-results-container');
+            if(data.length === 0) {
+                container.innerHTML = `<div class="text-center py-4 text-slate-500">No matching glyphs found.</div>`;
+                return;
+            }
+            container.innerHTML = data.map(d => `
+                <div class="px-2 py-1 border-b border-slate-900 flex justify-between items-center hover:bg-slate-900/50 rounded">
+                    <span class="font-bold font-mono bg-black text-cyan-400 px-2 py-0.5 rounded border border-slate-800 text-sm">${d.char === ' ' ? 'SPC' : d.char}</span>
+                    <span class="text-slate-400">Luminance Density: <span class="text-cyan-400 font-bold">${d.density.toFixed(1)}%</span></span>
+                </div>
+            `).join('');
+        }
+
+        function filterDB() {
+            let q = document.getElementById('db-search').value.toLowerCase();
+            let filtered = unicodeDatabase.filter(d => d.char.toLowerCase().includes(q) || d.density.toFixed(1).includes(q));
+            renderDBTable(filtered);
+        }
+
+        function toggleMasterEngine() {
+            isEngineRunning = document.getElementById('master-osc').checked;
+            document.getElementById('global-status-badge').innerText = isEngineRunning ? "Engine Active" : "Engine Paused";
+            document.getElementById('global-status-badge').className = isEngineRunning ? 
+                "cyber-badge bg-emerald-950 text-emerald-400 border border-emerald-800" : 
+                "cyber-badge bg-rose-950 text-rose-400 border border-rose-800";
+        }
+
+        function updateBaseParam(key) {
+            oscillators[key].base = parseFloat(document.getElementById(`param-${key}`).value);
+            if(key === 'cols') {
+                document.getElementById('dimension-indicator').innerText = `(${Math.round(oscillators[key].base)} cols)`;
+            }
+        }
+
+        function updateOscSettings(key) {
+            oscillators[key].mode = document.getElementById(`osc-mode-${key}`).value;
+            oscillators[key].enabled = document.getElementById(`osc-en-${key}`).checked;
+        }
+
+        function adjustOscSpeed(key, delta) {
+            oscillators[key].speed = Math.max(0, Math.min(5, oscillators[key].speed + delta));
+            document.getElementById(`speed-${key}`).innerText = oscillators[key].speed.toFixed(1) + 'x';
+        }
+
+        function calculateOscillatedValues(time) {
+            let isV8Active = document.getElementById('lab-3-chk').checked;
+
+            for(let key in oscillators) {
+                let osc = oscillators[key];
+                osc.enabled = document.getElementById(`osc-en-${key}`).checked;
+                
+                if(!osc.enabled || !isEngineRunning) {
+                    osc.val = osc.base;
+                } else {
+                    let t = (time / 2000) * osc.speed;
+                    let phaseOffset = 0;
+                    
+                    if(isV8Active) {
+                        if(key === 'contrast') phaseOffset = 0;
+                        if(key === 'brightness') phaseOffset = (Math.PI * 2) * 0.33;
+                        if(key === 'cols') phaseOffset = (Math.PI * 2) * 0.66;
+                    }
+
+                    let modifier = 0;
+                    if(osc.mode === 'pingpong') {
+                        modifier = Math.sin((t * Math.PI) + phaseOffset) * osc.sweep;
+                    } else {
+                        modifier = (((t + phaseOffset/(Math.PI*2)) % 1) * 2 - 1) * osc.sweep;
+                    }
+                    
+                    osc.val = osc.base + modifier;
+                }
+                if(key === 'cols') osc.val = Math.max(15, Math.min(120, Math.round(osc.val)));
+                if(key === 'contrast') osc.val = Math.max(0.1, osc.val);
+            }
+        }
+
+        function updateColorPalette() {
+            selectedPalette = document.getElementById('color-palette-select').value;
+            showToast(`Palette: ${selectedPalette.toUpperCase()}`);
+        }
+
+        function stopInputStreams() {
+            if(webcamStream) {
+                webcamStream.getTracks().forEach(t => t.stop());
+                webcamStream = null;
+                isWebcamActive = false;
+                document.getElementById('webcam-btn').className = "px-2 py-0.5 bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-600/40 rounded text-[11px] font-bold";
+            }
+            if(sourceVideoEl) {
+                sourceVideoEl.pause();
+                sourceVideoEl = null;
+            }
+            isAudioSynthActive = false;
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            stopInputStreams();
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    let canvas = document.getElementById('source-img-canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    sourceImage = canvas;
+                    showToast("Image stream loaded");
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+
+        function handleVideoUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            stopInputStreams();
+            const video = document.getElementById('source-video');
+            video.src = URL.createObjectURL(file);
+            video.load();
+            video.onloadeddata = () => {
+                sourceVideoEl = video;
+                video.play();
+                showToast("Video stream active");
+            };
+        }
+
+        async function toggleWebcam() {
+            if(isWebcamActive) {
+                stopInputStreams();
+                showToast("Webcam stopped");
+                loadPreset('gradient');
+                return;
+            }
+
+            try {
+                stopInputStreams();
+                let stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+                webcamStream = stream;
+                let v = document.getElementById('webcam-video');
+                v.srcObject = stream;
+                v.play();
+                isWebcamActive = true;
+                document.getElementById('webcam-btn').className = "px-2 py-0.5 bg-emerald-600 text-white border border-emerald-400 rounded text-[11px] font-bold animate-pulse";
+                showToast("Live Webcam Feed Active");
+            } catch(err) {
+                showToast("Webcam access denied or unavailable");
+            }
+        }
+
+        function toggleAudioSynth() {
+            if(isAudioSynthActive) {
+                isAudioSynthActive = false;
+                document.getElementById('audio-btn').className = "px-2 py-0.5 bg-amber-900/60 hover:bg-amber-800 text-amber-200 border border-amber-600/40 rounded text-[11px] font-bold";
+                loadPreset('gradient');
+                return;
+            }
+
+            stopInputStreams();
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                audioAnalyser = audioCtx.createAnalyser();
+                audioAnalyser.fftSize = 64;
+                audioDataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(110, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                
+                osc.connect(gain);
+                gain.connect(audioAnalyser);
+                gain.connect(audioCtx.destination);
+                osc.start();
+
+                isAudioSynthActive = true;
+                document.getElementById('audio-btn').className = "px-2 py-0.5 bg-amber-500 text-black border border-amber-300 rounded text-[11px] font-bold animate-pulse";
+                showToast("Audio Waveform Active");
+            } catch(e) {
+                showToast("Audio Synthesizer error");
+            }
+        }
+
+        function loadPreset(type) {
+            stopInputStreams();
+            const canvas = document.getElementById('source-img-canvas');
+            canvas.width = 120; canvas.height = 120;
+            const ctx = canvas.getContext('2d');
+
+            if (type === 'gradient') {
+                const grad = ctx.createLinearGradient(0, 0, 120, 120);
+                grad.addColorStop(0, '#000'); grad.addColorStop(0.5, '#888'); grad.addColorStop(1, '#fff');
+                ctx.fillStyle = grad; ctx.fillRect(0, 0, 120, 120);
+            } else if (type === 'noise') {
+                for(let i=0; i<14400; i++) {
+                    ctx.fillStyle = Math.random()>0.5 ? '#fff' : '#000';
+                    ctx.fillRect((i%120), Math.floor(i/120), 1, 1);
+                }
+            } else if (type === 'shapes') {
+                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 120, 120);
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(60, 60, 35, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(15, 15, 30, 30);
+            } else if (type === 'matrix') {
+                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 120, 120);
+                ctx.fillStyle = '#0f0'; ctx.font = '12px monospace';
+                for(let i=0; i<10; i++) {
+                    ctx.fillText("1010101", (i*12)%120, (i*20)%120);
+                }
+            }
+            sourceImage = canvas;
+        }
+
+        function getStyleForColor(r, g, b, x, y, time) {
+            if (selectedPalette === 'mono') return null;
+            if (selectedPalette === 'rgb') return `color:rgb(${r},${g},${b})`;
+            if (selectedPalette === 'matrix') {
+                let bright = Math.round((r + g + b) / 3);
+                return `color:rgb(0,${bright},${Math.round(bright*0.3)})`;
+            }
+            if (selectedPalette === 'amber') {
+                let bright = Math.round((r + g + b) / 3);
+                return `color:rgb(${bright},${Math.round(bright*0.7)},0)`;
+            }
+            if (selectedPalette === 'synthwave') {
+                return ((x + y) % 2 === 0) ? `color:rgb(236,72,153)` : `color:rgb(6,182,212)`;
+            }
+            if (selectedPalette === 'monokai') {
+                return `color:rgb(${Math.min(255, r+50)},${g},${Math.max(100, b)})`;
+            }
+            if (selectedPalette === 'gameboy') {
+                let avg = (r + g + b) / 3;
+                if(avg < 64) return `color:#0f380f`;
+                if(avg < 128) return `color:#306230`;
+                if(avg < 192) return `color:#8bac0f`;
+                return `color:#9bbc0f`;
+            }
+            return null;
+        }
+
+        function generateASCII(time) {
+            let activeSource = sourceImage;
+            
+            if (isWebcamActive) {
+                let v = document.getElementById('webcam-video');
+                if(v.readyState === 4) {
+                    let canvas = document.getElementById('source-img-canvas');
+                    canvas.width = 120; canvas.height = Math.round(120 * (v.videoHeight / v.videoWidth || 0.75));
+                    canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+                    activeSource = canvas;
+                }
+            } else if (sourceVideoEl && !sourceVideoEl.paused) {
+                let canvas = document.getElementById('source-img-canvas');
+                canvas.width = 120; canvas.height = Math.round(120 * (sourceVideoEl.videoHeight / sourceVideoEl.videoWidth || 0.75));
+                canvas.getContext('2d').drawImage(sourceVideoEl, 0, 0, canvas.width, canvas.height);
+                activeSource = canvas;
+            } else if (isAudioSynthActive && audioAnalyser) {
+                audioAnalyser.getByteFrequencyData(audioDataArray);
+                let canvas = document.getElementById('source-img-canvas');
+                canvas.width = 120; canvas.height = 60;
+                let ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000'; ctx.fillRect(0,0,120,60);
+                ctx.fillStyle = '#fff';
+                for(let i=0; i<audioDataArray.length; i++) {
+                    let h = (audioDataArray[i] / 255) * 60;
+                    ctx.fillRect(i * 4, 60 - h, 3, h);
+                }
+                activeSource = canvas;
+            }
+
+            if (!activeSource || unicodeDatabase.length === 0) return "";
+            
+            let cols = Math.round(oscillators.cols.val);
+            let contrast = oscillators.contrast.val;
+            let bright = oscillators.brightness.val;
+            
+            let aspect = activeSource.height / activeSource.width;
+            let rows = Math.round(cols * aspect * 0.55); 
+            
+            const workCanvas = document.getElementById('hidden-canvas');
+            workCanvas.width = cols; workCanvas.height = rows;
+            const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(activeSource, 0, 0, cols, rows);
+            const pixels = ctx.getImageData(0, 0, cols, rows).data;
+
+            let outputMarkup = "";
+            let maxDbIdx = unicodeDatabase.length - 1;
+            let frameTick = Math.floor(time / 40) % 3;
+            let highErrorRow = Math.floor(rows / 2);
+            let highErrorCol = Math.floor(cols / 2);
+
+            let isLab1Active = document.getElementById('lab-1-chk').checked;
+            let isLab2Active = document.getElementById('lab-2-chk').checked;
+
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    const idx = (y * cols + x) * 4;
+                    let r = pixels[idx], g = pixels[idx+1], b = pixels[idx+2];
+                    let gray = (r * 0.299 + g * 0.587 + b * 0.114);
+                    gray = ((gray - 128) * contrast) + 128 + bright;
+                    gray = Math.max(0, Math.min(255, gray));
+                    
+                    let densityTarget = (gray / 255) * 100;
+                    
+                    let bestIdx = 0;
+                    let minDiff = 100;
+                    for(let i = 0; i <= maxDbIdx; i++) {
+                        let diff = Math.abs(unicodeDatabase[i].density - densityTarget);
+                        if(diff < minDiff) {
+                            minDiff = diff;
+                            bestIdx = i;
+                        }
+                    }
+
+                    let chosenChar = unicodeDatabase[bestIdx].char;
+
+                    if (isLab1Active && minDiff > 3.5 && maxDbIdx >= 2) {
+                        let rotatedIdx = Math.max(0, Math.min(maxDbIdx, bestIdx + (frameTick - 1)));
+                        chosenChar = unicodeDatabase[rotatedIdx].char;
+                    } 
+                    
+                    if (isLab2Active && Math.abs(y - highErrorRow) < 6 && Math.abs(x - highErrorCol) < 10) {
+                        let isEvenCell = ((x + y + Math.floor(time / 100)) % 2 === 0);
+                        let offsetIdx = isEvenCell ? Math.min(maxDbIdx, bestIdx + 1) : Math.max(0, bestIdx - 1);
+                        chosenChar = unicodeDatabase[offsetIdx].char;
+                    }
+
+                    let styleAttr = getStyleForColor(r, g, b, x, y, time);
+                    if (styleAttr) {
+                        outputMarkup += `<span style="${styleAttr}">${chosenChar}</span>`;
+                    } else {
+                        outputMarkup += chosenChar;
+                    }
+                }
+                outputMarkup += '\n';
+            }
+            
+            return outputMarkup;
+        }
+
+        function engineLoop(timestamp) {
+            if(currentView === 2) {
+                if (timestamp - lastFrameTime > 25) {
+                    fps = Math.round(1000 / (timestamp - lastFrameTime));
+                    document.getElementById('fps-counter').innerText = fps + " FPS";
+                    lastFrameTime = timestamp;
+                    
+                    calculateOscillatedValues(timestamp);
+                    let res = generateASCII(timestamp);
+                    let outEl = document.getElementById('ascii-output');
+                    
+                    if (selectedPalette !== 'mono') {
+                        outEl.innerHTML = res;
+                    } else {
+                        outEl.innerText = res;
+                    }
+                }
+            }
+            engineAnimationFrame = requestAnimationFrame(engineLoop);
+        }
+
+        function stampCurrentFrame() {
+            let currentContent = document.getElementById('ascii-output').innerHTML;
+            if(!currentContent) return;
+            permanentFrames.push(currentContent);
+            document.getElementById('frame-count').innerText = permanentFrames.length;
+            document.getElementById('animator-output').innerHTML = currentContent;
+            document.getElementById('timeline-index').innerText = `Frame ${permanentFrames.length} / ${permanentFrames.length}`;
+            showToast(`Frame stamped (${permanentFrames.length})`);
+        }
+
+        function clearFrames() {
+            permanentFrames = [];
+            document.getElementById('frame-count').innerText = 0;
+            document.getElementById('animator-output').innerText = "Buffer cleared.";
+            document.getElementById('timeline-index').innerText = "Frame 0 / 0";
+            stopAnimator();
+            showToast("Timeline buffer cleared");
+        }
+
+        function toggleAnimatorPlay() {
+            if(permanentFrames.length === 0) {
+                showToast("No frames in buffer to play");
+                return;
+            }
+            if(isAnimatorPlaying) {
+                stopAnimator();
+            } else {
+                startAnimator();
+            }
+        }
+
+        function updateAnimatorSpeed() {
+            animatorSpeedMs = parseInt(document.getElementById('animator-speed').value);
+            document.getElementById('animator-speed-val').innerText = `${animatorSpeedMs}ms`;
+            if(isAnimatorPlaying) {
+                stopAnimator();
+                startAnimator();
+            }
+        }
+
+        function startAnimator() {
+            isAnimatorPlaying = true;
+            document.getElementById('animator-play-btn').innerText = "⏸ Pause Stream";
+            document.getElementById('animator-status').innerText = "Playing";
+            animatorInterval = setInterval(() => {
+                document.getElementById('animator-output').innerHTML = permanentFrames[animatorIndex];
+                document.getElementById('timeline-index').innerText = `Frame ${animatorIndex + 1} / ${permanentFrames.length}`;
+                animatorIndex = (animatorIndex + 1) % permanentFrames.length;
+            }, animatorSpeedMs);
+        }
+
+        function stopAnimator() {
+            isAnimatorPlaying = false;
+            clearInterval(animatorInterval);
+            document.getElementById('animator-play-btn').innerText = "▶ Play Stream";
+            document.getElementById('animator-status').innerText = "Idle";
+        }
+
+        function copyAsciiToClipboard() {
+            let el = document.getElementById('ascii-output');
+            let text = el.innerText || el.textContent;
+            
+            let tempArea = document.createElement('textarea');
+            tempArea.value = text;
+            document.body.appendChild(tempArea);
+            tempArea.select();
+            try {
+                document.execCommand('copy');
+                showToast("ASCII copied to clipboard!");
+            } catch(e) {
+                showToast("Clipboard copy failed");
+            }
+            document.body.removeChild(tempArea);
+        }
+
+        function exportFrameAsPNG() {
+            let el = document.getElementById('ascii-output');
+            let text = el.innerText || el.textContent;
+            let lines = text.split('\n');
+            
+            let c = document.createElement('canvas');
+            let ctx = c.getContext('2d');
+            let fontSize = 12;
+            ctx.font = `${fontSize}px monospace`;
+            
+            let maxLen = 0;
+            lines.forEach(l => { if(l.length > maxLen) maxLen = l.length; });
+            
+            c.width = maxLen * (fontSize * 0.6) + 20;
+            c.height = lines.length * fontSize + 20;
+            
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, c.width, c.height);
+            ctx.fillStyle = '#06b6d4';
+            ctx.font = `${fontSize}px monospace`;
+            
+            lines.forEach((l, idx) => {
+                ctx.fillText(l, 10, 15 + idx * fontSize);
+            });
+
+            let a = document.createElement('a');
+            a.download = `bitmatrix_frame_${Date.now()}.png`;
+            a.href = c.toDataURL('image/png');
+            a.click();
+            showToast("PNG Snapshot Exported!");
+        }
+
+        function exportAnsiStream(format) {
+            if(permanentFrames.length === 0) {
+                showToast("Stamp frames before exporting!");
+                return;
+            }
+            let scriptContent = "";
+            
+            if(format === 'ps1') {
+                scriptContent = "# UTF-8 BitMatrix Engine - PowerShell Stream\n";
+                permanentFrames.forEach((f) => {
+                    scriptContent += `Write-Host "$([char]27)[H$([char]27)[J"\n`;
+                    scriptContent += `@'\n${f.replace(/<[^>]*>/g, '')}\n'@\n`;
+                    scriptContent += `Start-Sleep -Milliseconds ${animatorSpeedMs}\n`;
+                });
+            } else {
+                scriptContent = "#!/usr/bin/env bash\n# UTF-8 BitMatrix Engine - Shell Stream\n";
+                permanentFrames.forEach((f) => {
+                    scriptContent += `clear\ncat << 'EOF'\n${f.replace(/<[^>]*>/g, '')}\nEOF\n`;
+                    scriptContent += `sleep ${(animatorSpeedMs/1000).toFixed(2)}\n`;
+                });
+            }
+
+            let blob = new Blob([scriptContent], {type: 'text/plain'});
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.href = url; 
+            a.download = `bitmatrix_stream.${format}`;
+            a.click();
+            showToast(`Exported ${format.toUpperCase()} stream script`);
+        }
+
+        function exportRawTextSequence() {
+            if(permanentFrames.length === 0) {
+                showToast("Buffer empty!");
+                return;
+            }
+            let text = permanentFrames.map((f, i) => `=== FRAME ${i+1} ===\n` + f.replace(/<[^>]*>/g, '')).join('\n\n');
+            let blob = new Blob([text], {type: 'text/plain'});
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement('a');
+            a.href = url; a.download = `ascii_frames_${Date.now()}.txt`;
+            a.click();
+            showToast("Exported TXT Frame Sequence");
+        }
+
+        function applyTransform(id) {
+            let t = transformState[id];
+            document.getElementById(id).style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.scale})`;
+        }
+
+        function resetTransform(id) {
+            transformState[id] = { scale: 1, x: 0, y: 0 };
+            applyTransform(id);
+            showToast("Viewport reset");
+        }
+
+        function zoomStep(id, delta) {
+            transformState[id].scale = Math.max(0.2, Math.min(5.0, transformState[id].scale + delta));
+            applyTransform(id);
+        }
+
+        function handleZoom(e, id) {
+            e.preventDefault();
+            let delta = e.deltaY > 0 ? -0.1 : 0.1;
+            transformState[id].scale = Math.max(0.2, Math.min(5.0, transformState[id].scale + delta));
+            applyTransform(id);
+        }
+        
+        let isTransDragging = false;
+        let transDragStart = { x: 0, y: 0 };
+        function startPan(e, id) { 
+            isTransDragging = true; 
+            transDragStart = { x: e.clientX - transformState[id].x, y: e.clientY - transformState[id].y }; 
+        }
+        function doPan(e, id) { 
+            if(isTransDragging) { 
+                transformState[id].x = e.clientX - transDragStart.x; 
+                transformState[id].y = e.clientY - transDragStart.y; 
+                applyTransform(id); 
+            } 
+        }
+        function endPan() { isTransDragging = false; }
+        
+        function startPanTouch(e, id) {
+            if(e.touches.length === 1) {
+                isTransDragging = true;
+                transDragStart = { x: e.touches[0].clientX - transformState[id].x, y: e.touches[0].clientY - transformState[id].y };
+            }
+        }
+        function doPanTouch(e, id) {
+            if(isTransDragging && e.touches.length === 1) {
+                e.preventDefault();
+                transformState[id].x = e.touches[0].clientX - transDragStart.x;
+                transformState[id].y = e.touches[0].clientY - transDragStart.y;
+                applyTransform(id);
+            }
+        }
+    </script>
+</body>
+</html>
