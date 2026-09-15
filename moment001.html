@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>UTF-8 BitMatrix Engine - Lab V3 (Fully Linked)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --panel-bg: #0f172a;
+            --panel-border: #1e293b;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-pink: #ec4899;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(2, 6, 23, 0.8);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--panel-border);
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+
+        .cyber-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .cyber-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .osc-box {
+            background: rgba(2, 6, 23, 0.6);
+            border-left: 3px solid var(--accent-purple);
+            padding: 4px 8px;
+            border-radius: 0 6px 6px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            font-size: 10px;
+        }
+
+        .viewport-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        #ascii-output, #animator-output {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 9px;
+            line-height: 1;
+            white-space: pre;
+            background: #000;
+            color: #fff;
+            transform-origin: center center;
+            cursor: grab;
+        }
+
+        #ascii-output:active, #animator-output:active {
+            cursor: grabbing;
+        }
+
+        .hidden-canvas {
+            display: none !important;
+        }
+
+        input[type="range"] {
+            accent-color: var(--accent-cyan);
+        }
+
+        #toast-container {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--accent-cyan);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            animation: fadeIn 0.2s ease-out forwards;
+            pointer-events: auto;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 z-50 flex-shrink-0 h-10">
+        <div class="flex items-center gap-1.5">
+            <button onclick="switchView(1)" id="tab-btn-1" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition">1: Glyph DB</button>
+            <button onclick="switchView(2)" id="tab-btn-2" class="px-2.5 py-1 text-xs rounded bg-cyan-500 text-black font-bold hover:bg-cyan-400 transition">2: Live Studio</button>
+            <button onclick="switchView(3)" id="tab-btn-3" class="px-2.5 py-1 text-xs rounded bg-slate-800 text-purple-400 font-bold hover:bg-slate-700 transition">3: Timeline</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-cyan-400 tracking-wider hidden sm:inline">UTF-8 BITMATRIX LAB V3</span>
+            <span id="global-status-badge" class="cyber-badge bg-emerald-950 text-emerald-400 border border-emerald-800">Engine Fully Wired</span>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+            <button onclick="toggleHelpModal()" class="w-7 h-7 bg-slate-800 text-cyan-400 border border-cyan-500/40 rounded flex items-center justify-center font-bold text-xs hover:bg-cyan-500 hover:text-black transition" title="Help Guide">?</button>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-hidden relative flex flex-col p-2">
+        
+        <!-- VIEW 1 -->
+        <div id="view-1" class="hidden flex-col gap-3 w-full h-full overflow-y-auto">
+            <div class="cyber-card p-3 flex flex-col gap-2">
+                <div class="flex justify-between items-center text-xs font-bold text-cyan-400 uppercase tracking-widest">
+                    <span>Font Matrix Glyph Scanner</span>
+                    <span id="scan-stats" class="text-slate-400 text-[10px]">Ready</span>
+                </div>
+                
+                <div class="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <input type="text" id="custom-chars" value=" ░▒▓█▀▄▌▐■□▲▼◄►0123456789" class="flex-1 bg-slate-950 text-slate-100 border border-slate-800 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-cyan-500">
+                    <button onclick="runMatrixScan()" class="px-3 py-1 bg-cyan-500 text-black font-bold text-xs rounded hover:bg-cyan-400 transition">Rescan Set</button>
+                </div>
+
+                <div class="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-800 text-[10px]">
+                    <span class="text-slate-400 font-bold">Presets:</span>
+                    <button onclick="loadGlyphPreset('dense')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Dense Blocks</button>
+                    <button onclick="loadGlyphPreset('ascii')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Standard ASCII</button>
+                    <button onclick="loadGlyphPreset('cyber')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Cyber Matrix</button>
+                    <button onclick="loadGlyphPreset('braille')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Braille Set</button>
+                    <button onclick="loadGlyphPreset('kanji')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded">Katakana</button>
+                </div>
+            </div>
+
+            <div class="cyber-card p-3 flex-1 flex flex-col gap-2 min-h-[250px]">
+                <div class="flex justify-between items-center text-xs font-bold text-cyan-400 uppercase tracking-widest">
+                    <span>Sorted Luminance Database</span>
+                    <span id="db-count" class="text-slate-400 text-[10px]">0 Glyphs</span>
+                </div>
+                <input type="text" id="db-search" placeholder="Search glyph or density..." oninput="filterDB()" class="bg-slate-950 border border-slate-800 text-slate-100 px-2 py-1 rounded text-xs focus:outline-none focus:border-cyan-500">
+                
+                <div id="db-results-container" class="flex-1 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-2 text-xs flex flex-col gap-1 min-h-[180px]">
+                    <div class="text-center py-8 text-slate-500">Scanning font metrics...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2 -->
+        <div id="view-2" class="flex flex-col gap-2 w-full h-full overflow-hidden">
+            
+            <div class="cyber-card p-2 flex flex-col gap-2 flex-shrink-0">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    
+                    <div class="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded border border-slate-800 text-xs flex-wrap">
+                        <label class="flex items-center gap-1 text-slate-200 cursor-pointer px-1" title="Toggle Engine Processing">
+                            <input type="checkbox" id="master-osc" checked onchange="toggleMasterEngine()" class="accent-cyan-500">
+                            <span class="font-bold text-[11px]">ENG</span>
+                        </label>
+                        
+                        <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
+                        
+                        <button onclick="document.getElementById('img-upload').click()" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-bold">🖼️ Image</button>
+                        <button onclick="document.getElementById('video-upload').click()" class="px-2 py-0.5 bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-600/40 rounded text-[11px] font-bold">🎬 Video</button>
+                        <button id="webcam-btn" onclick="toggleWebcam()" class="px-2 py-0.5 bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-600/40 rounded text-[11px] font-bold">📹 Cam</button>
+
+                        <input type="file" id="img-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                        <input type="file" id="video-upload" accept="video/mp4,video/webm" class="hidden" onchange="handleVideoUpload(event)">
+
+                        <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
+
+                        <div class="flex items-center gap-1 bg-slate-900 px-1 py-0.5 rounded border border-slate-800 text-[10px]">
+                            <button onclick="transportRewind()" class="text-cyan-400 hover:text-cyan-200 font-bold px-1">⏪</button>
+                            <button id="transport-play-btn" onclick="toggleTransportPlay()" class="text-emerald-400 hover:text-emerald-200 font-bold px-1">▶</button>
+                            <button onclick="transportStop()" class="text-rose-400 hover:text-rose-200 font-bold px-1">⏹</button>
+                            <button onclick="transportForward()" class="text-cyan-400 hover:text-cyan-200 font-bold px-1">⏩</button>
+                        </div>
+
+                        <button id="split-view-btn" onclick="toggleSplitView()" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 rounded text-[11px] font-bold">🌓 Split View</button>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded border border-slate-800 text-xs">
+                        <button onclick="loadPreset('gradient')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Grad</button>
+                        <button onclick="loadPreset('noise')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Noise</button>
+                        <button onclick="loadPreset('shapes')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px]">Shapes</button>
+
+                        <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
+
+                        <button onclick="stampCurrentFrame()" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded text-[10px]">📸 Stamp Frame</button>
+                        <button onclick="stampEntireClip()" class="px-2 py-0.5 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded text-[10px]">🎞️ Stamp Clip</button>
+                    </div>
+
+                    <div class="flex items-center gap-2 bg-slate-950/80 p-1 rounded border border-slate-800 text-xs">
+                        <div class="flex items-center gap-1">
+                            <span class="text-[10px] text-amber-400 font-bold">🎨 Palette:</span>
+                            <select id="color-palette-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-[10px] rounded px-1 py-0.5 focus:outline-none">
+                                <option value="mono">Monochrome (B&W)</option>
+                                <option value="rgb">Full RGB Direct</option>
+                                <option value="matrix">Matrix Cyber Green</option>
+                                <option value="amber">Amber CRT Retro</option>
+                                <option value="synthwave">Synthwave Neon</option>
+                                <option value="monokai">Monokai Dark</option>
+                                <option value="gameboy">Retro GameBoy</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Oscillators Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1 border-t border-slate-800/80">
+                    <!-- Contrast -->
+                    <div class="osc-box" style="border-left-color: var(--accent-purple);">
+                        <label class="flex items-center gap-1 text-slate-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="osc-en-contrast" class="accent-purple-500"> Con
+                        </label>
+                        <input type="range" id="param-contrast" min="0.1" max="3" step="0.1" value="1" class="w-16">
+                        <select id="osc-mode-contrast" class="bg-slate-900 border border-slate-800 text-[9px] rounded px-1">
+                            <option value="pingpong">Ping</option>
+                            <option value="sawtooth">Saw</option>
+                        </select>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded">
+                            <button onclick="adjustOscSpeed('contrast', -0.5)" class="px-1 text-slate-400 hover:text-white font-bold">-</button>
+                            <span id="speed-contrast" class="w-6 text-center text-[9px] text-cyan-400 font-bold">1x</span>
+                            <button onclick="adjustOscSpeed('contrast', 0.5)" class="px-1 text-slate-400 hover:text-white font-bold">+</button>
+                        </div>
+                    </div>
+
+                    <!-- Brightness -->
+                    <div class="osc-box" style="border-left-color: var(--accent-cyan);">
+                        <label class="flex items-center gap-1 text-slate-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="osc-en-brightness" class="accent-cyan-500"> Bri
+                        </label>
+                        <input type="range" id="param-brightness" min="-100" max="100" step="1" value="0" class="w-16">
+                        <select id="osc-mode-brightness" class="bg-slate-900 border border-slate-800 text-[9px] rounded px-1">
+                            <option value="pingpong">Ping</option>
+                            <option value="sawtooth">Saw</option>
+                        </select>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded">
+                            <button onclick="adjustOscSpeed('brightness', -0.5)" class="px-1 text-slate-400 hover:text-white font-bold">-</button>
+                            <span id="speed-brightness" class="w-6 text-center text-[9px] text-cyan-400 font-bold">1x</span>
+                            <button onclick="adjustOscSpeed('brightness', 0.5)" class="px-1 text-slate-400 hover:text-white font-bold">+</button>
+                        </div>
+                    </div>
+
+                    <!-- Columns (Resolution) -->
+                    <div class="osc-box" style="border-left-color: var(--accent-emerald);">
+                        <label class="flex items-center gap-1 text-slate-300 font-bold cursor-pointer">
+                            <input type="checkbox" id="osc-en-cols" class="accent-emerald-500"> Res
+                        </label>
+                        <input type="range" id="param-cols" min="20" max="120" step="2" value="65" class="w-16">
+                        <select id="osc-mode-cols" class="bg-slate-900 border border-slate-800 text-[9px] rounded px-1">
+                            <option value="pingpong">Ping</option>
+                            <option value="sawtooth">Saw</option>
+                        </select>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded">
+                            <button onclick="adjustOscSpeed('cols', -0.5)" class="px-1 text-slate-400 hover:text-white font-bold">-</button>
+                            <span id="speed-cols" class="w-6 text-center text-[9px] text-cyan-400 font-bold">1x</span>
+                            <button onclick="adjustOscSpeed('cols', 0.5)" class="px-1 text-slate-400 hover:text-white font-bold">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Viewport Container -->
+            <div class="flex-1 flex flex-col min-h-0 relative">
+                <div class="flex justify-between items-center px-2 py-1 bg-slate-950 text-[10px] border border-b-0 border-slate-800 rounded-t-lg">
+                    <div class="flex items-center gap-2">
+                        <span class="text-cyan-400 font-bold">Live Matrix Viewport</span>
+                        <span id="dimension-indicator" class="text-slate-500 font-mono">(65 cols)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="fps-counter" class="text-emerald-400 font-mono font-bold">0 FPS</span>
+                    </div>
+                </div>
+
+                <div class="viewport-container flex flex-row" id="dither-viewport">
+                    <div id="split-source-container" class="hidden w-1/2 h-full border-r border-slate-800 justify-center items-center overflow-hidden bg-black">
+                        <canvas id="split-source-canvas" class="max-w-full max-h-full object-contain"></canvas>
+                    </div>
+
+                    <div id="ascii-output" class="flex-1 flex justify-center items-center overflow-auto p-2"></div>
+                </div>
+
+                <div class="flex gap-2 pt-2 bg-slate-950 flex-shrink-0">
+                    <button onclick="stampCurrentFrame()" class="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded transition flex items-center justify-center gap-1">
+                        <span>📸 Stamp Frame</span>
+                        <span class="bg-purple-900/80 px-1.5 py-0.5 rounded text-[10px]" id="frame-count">0</span>
+                    </button>
+                    <button onclick="copyAsciiToClipboard()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs rounded border border-slate-700">Copy Text</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3 -->
+        <div id="view-3" class="hidden flex-col gap-2 w-full h-full overflow-hidden">
+            <div class="cyber-card p-2 flex flex-col gap-2 flex-shrink-0">
+                <div class="flex justify-between items-center text-xs font-bold text-purple-400 uppercase tracking-widest">
+                    <span>Frame Buffer Timeline</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearFrames()" class="px-2.5 py-1 bg-rose-900/60 hover:bg-rose-800 text-rose-300 border border-rose-700/40 font-bold text-xs rounded">Clear Buffer</button>
+                </div>
+            </div>
+            <div class="cyber-card p-2 flex-1 flex flex-col min-h-0">
+                <div class="viewport-container">
+                    <div id="animator-output">Upload video or click "Stamp Frame" in Live Studio to record sequence.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <canvas id="hidden-canvas" class="hidden-canvas"></canvas>
+    <canvas id="source-img-canvas" class="hidden-canvas"></canvas>
+    <video id="source-video" class="hidden-canvas" loop muted playsinline></video>
+    <video id="webcam-video" class="hidden-canvas" autoplay muted playsinline></video>
+
+    <div id="toast-container"></div>
+
+    <script>
+        let currentView = 2;
+        let unicodeDatabase = [];
+        let sourceImage = null;
+        let sourceVideoEl = null;
+        let webcamStream = null;
+        let isWebcamActive = false;
+        let isSplitView = false;
+        let activeSourceType = 'gradient';
+        let isEngineRunning = true;
+        let lastFrameTime = performance.now();
+        let frameCounter = 0;
+        let permanentFrames = [];
+
+        // Oscillator State Machine
+        const oscState = {
+            contrast: { dir: 1, val: 1.0, speed: 1.0 },
+            brightness: { dir: 1, val: 0, speed: 1.0 },
+            cols: { dir: 1, val: 65, speed: 1.0 }
+        };
+
+        window.onload = () => {
+            sourceVideoEl = document.getElementById('source-video');
+            sourceVideoEl.loop = true;
+            runMatrixScan();
+            switchView(2);
+            requestAnimationFrame(engineLoop);
+        };
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        function toggleTransportPlay() {
+            if (sourceVideoEl && sourceVideoEl.src) {
+                if (sourceVideoEl.paused) {
+                    sourceVideoEl.play();
+                    document.getElementById('transport-play-btn').innerText = '⏸';
+                } else {
+                    sourceVideoEl.pause();
+                    document.getElementById('transport-play-btn').innerText = '▶';
+                }
+            }
+        }
+        function transportRewind() { if (sourceVideoEl) sourceVideoEl.currentTime = Math.max(0, sourceVideoEl.currentTime - 2); }
+        function transportForward() { if (sourceVideoEl) sourceVideoEl.currentTime = Math.min(sourceVideoEl.duration, sourceVideoEl.currentTime + 2); }
+        function transportStop() { if (sourceVideoEl) { sourceVideoEl.pause(); sourceVideoEl.currentTime = 0; document.getElementById('transport-play-btn').innerText = '▶'; } }
+
+        function toggleSplitView() {
+            isSplitView = !isSplitView;
+            const container = document.getElementById('split-source-container');
+            const btn = document.getElementById('split-view-btn');
+            if (isSplitView) {
+                container.classList.remove('hidden');
+                container.classList.add('flex');
+                btn.classList.add('bg-amber-500', 'text-black');
+            } else {
+                container.classList.add('hidden');
+                container.classList.remove('flex');
+                btn.classList.remove('bg-amber-500', 'text-black');
+            }
+        }
+
+        function stampEntireClip() {
+            const currentAscii = document.getElementById('ascii-output').innerText;
+            if (!currentAscii.trim()) return;
+            const blob = new Blob([currentAscii], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `clip_stamp_${Date.now()}.txt`;
+            link.click();
+        }
+
+        function switchView(viewNum) {
+            document.getElementById(`view-1`).classList.add('hidden');
+            document.getElementById(`view-2`).classList.add('hidden');
+            document.getElementById(`view-3`).classList.add('hidden');
+            document.getElementById(`view-${viewNum}`).classList.remove('hidden');
+            document.getElementById(`view-${viewNum}`).classList.add('flex');
+            currentView = viewNum;
+        }
+
+        function handleVideoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            sourceVideoEl.src = URL.createObjectURL(file);
+            sourceVideoEl.loop = true;
+            sourceVideoEl.play();
+            activeSourceType = 'video';
+            document.getElementById('transport-play-btn').innerText = '⏸';
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => { sourceImage = img; activeSourceType = 'image'; };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function runMatrixScan() {
+            const customChars = document.getElementById('custom-chars').value || ' ░▒▓█';
+            unicodeDatabase = [];
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 16;
+            canvas.height = 16;
+
+            for (let char of customChars) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 16, 16);
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px monospace';
+                ctx.fillText(char, 2, 12);
+                
+                const imgData = ctx.getImageData(0, 0, 16, 16).data;
+                let total = 0;
+                for (let i = 0; i < imgData.length; i += 4) total += imgData[i];
+                unicodeDatabase.push({ char, density: total / (16 * 16 * 255) });
+            }
+            unicodeDatabase.sort((a, b) => a.density - b.density);
+            document.getElementById('db-count').innerText = `${unicodeDatabase.length} Glyphs`;
+        }
+
+        function loadGlyphPreset(preset) {
+            let set = ' ░▒▓█▀▄▌▐■□▲▼◄►0123456789';
+            if (preset === 'dense') set = ' ░▒▓█';
+            if (preset === 'ascii') set = ' .:-=+*#%@';
+            if (preset === 'cyber') set = ' 01░▒▓█<>/\\';
+            if (preset === 'braille') set = ' ⠁⠂⠄⠂⠁⠁⠂⠄⠂⠁';
+            if (preset === 'kanji') set = ' ｱｲｳｴｵｶｷｸｹｺ';
+            document.getElementById('custom-chars').value = set;
+            runMatrixScan();
+        }
+
+        function loadPreset(name) { activeSourceType = name; }
+        function toggleMasterEngine() { isEngineRunning = document.getElementById('master-osc').checked; }
+
+        function toggleWebcam() {
+            if (isWebcamActive) {
+                if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
+                isWebcamActive = false;
+                activeSourceType = 'gradient';
+            } else {
+                navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                    webcamStream = stream;
+                    document.getElementById('webcam-video').srcObject = stream;
+                    isWebcamActive = true;
+                    activeSourceType = 'webcam';
+                });
+            }
+        }
+
+        function adjustOscSpeed(param, delta) {
+            oscState[param].speed = Math.max(0.1, oscState[param].speed + delta);
+            document.getElementById(`speed-${param}`).innerText = `${oscState[param].speed.toFixed(1)}x`;
+        }
+
+        function stampCurrentFrame() {
+            permanentFrames.push(document.getElementById('ascii-output').innerHTML);
+            document.getElementById('frame-count').innerText = permanentFrames.length;
+        }
+
+        function copyAsciiToClipboard() {
+            navigator.clipboard.writeText(document.getElementById('ascii-output').innerText);
+            showToast('Copied to Clipboard');
+        }
+
+        function clearFrames() { permanentFrames = []; document.getElementById('frame-count').innerText = '0'; }
+
+        function drawSourceToCanvas(ctx, width, height) {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, width, height);
+
+            if (activeSourceType === 'video' && sourceVideoEl && sourceVideoEl.readyState >= 2) {
+                ctx.drawImage(sourceVideoEl, 0, 0, width, height);
+            } else if (activeSourceType === 'image' && sourceImage) {
+                ctx.drawImage(sourceImage, 0, 0, width, height);
+            } else if (activeSourceType === 'webcam' && isWebcamActive) {
+                ctx.drawImage(document.getElementById('webcam-video'), 0, 0, width, height);
+            } else if (activeSourceType === 'noise') {
+                const imgData = ctx.createImageData(width, height);
+                for (let i = 0; i < imgData.data.length; i += 4) {
+                    const v = Math.random() * 255;
+                    imgData.data[i] = v; imgData.data[i+1] = v; imgData.data[i+2] = v; imgData.data[i+3] = 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+            } else if (activeSourceType === 'shapes') {
+                const t = Date.now() * 0.003;
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(width/2 + Math.cos(t)*width/4, height/2 + Math.sin(t)*height/4, Math.min(width,height)/5, 0, Math.PI*2);
+                ctx.fill();
+            } else {
+                const t = Date.now() * 0.002;
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const val = Math.sin(x * 0.1 + t) * Math.cos(y * 0.1 + t) * 127 + 128;
+                        ctx.fillStyle = `rgb(${val},${val},${val})`;
+                        ctx.fillRect(x, y, 1, 1);
+                    }
+                }
+            }
+        }
+
+        // Color Palette Mapper with strict RGB Clamping
+        function getCssColor(r, g, b, palette) {
+            const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+            const cr = clamp(r), cg = clamp(g), cb = clamp(b);
+
+            if (palette === 'mono') return null;
+            if (palette === 'rgb') return `rgb(${cr},${cg},${cb})`;
+            if (palette === 'matrix') return `rgb(0,${cg},30)`;
+            if (palette === 'amber') return `rgb(${cr},${clamp(cg * 0.7)},0)`;
+            if (palette === 'synthwave') return `rgb(${cr},0,${cb})`;
+            if (palette === 'monokai') return `rgb(${cr},${cg},0)`;
+            if (palette === 'gameboy') {
+                const avg = (cr + cg + cb) / 3;
+                if (avg < 64) return '#0f380f';
+                if (avg < 128) return '#306230';
+                if (avg < 192) return '#8bac0f';
+                return '#9bbc0f';
+            }
+            return null;
+        }
+
+        // Escape HTML special characters to preserve string layout
+        function escapeHtml(char) {
+            if (char === '<') return '&lt;';
+            if (char === '>') return '&gt;';
+            if (char === '&') return '&amp;';
+            return char;
+        }
+
+        // Oscillators Update
+        function updateOscillators() {
+            // Contrast Osc
+            if (document.getElementById('osc-en-contrast').checked) {
+                let val = parseFloat(document.getElementById('param-contrast').value);
+                const mode = document.getElementById('osc-mode-contrast').value;
+                const speed = oscState.contrast.speed * 0.02;
+                if (mode === 'pingpong') {
+                    val += speed * oscState.contrast.dir;
+                    if (val >= 3.0 || val <= 0.1) oscState.contrast.dir *= -1;
+                } else {
+                    val = (val >= 3.0) ? 0.1 : val + speed;
+                }
+                document.getElementById('param-contrast').value = val.toFixed(2);
+            }
+
+            // Brightness Osc
+            if (document.getElementById('osc-en-brightness').checked) {
+                let val = parseInt(document.getElementById('param-brightness').value);
+                const mode = document.getElementById('osc-mode-brightness').value;
+                const speed = oscState.brightness.speed * 1.5;
+                if (mode === 'pingpong') {
+                    val += speed * oscState.brightness.dir;
+                    if (val >= 100 || val <= -100) oscState.brightness.dir *= -1;
+                } else {
+                    val = (val >= 100) ? -100 : val + speed;
+                }
+                document.getElementById('param-brightness').value = Math.round(val);
+            }
+
+            // Columns Osc
+            if (document.getElementById('osc-en-cols').checked) {
+                let val = parseInt(document.getElementById('param-cols').value);
+                const mode = document.getElementById('osc-mode-cols').value;
+                const speed = oscState.cols.speed * 0.5;
+                if (mode === 'pingpong') {
+                    val += speed * oscState.cols.dir;
+                    if (val >= 120 || val <= 20) oscState.cols.dir *= -1;
+                } else {
+                    val = (val >= 120) ? 20 : val + speed;
+                }
+                document.getElementById('param-cols').value = Math.round(val);
+            }
+        }
+
+        // Main Loop
+        function engineLoop(timestamp) {
+            const now = performance.now();
+            frameCounter++;
+            if (now - lastFrameTime >= 1000) {
+                document.getElementById('fps-counter').innerText = `${frameCounter} FPS`;
+                frameCounter = 0;
+                lastFrameTime = now;
+            }
+
+            if (isEngineRunning && currentView === 2) {
+                updateOscillators();
+
+                const cols = parseInt(document.getElementById('param-cols').value) || 65;
+                const rows = Math.floor(cols * 0.45);
+                const contrast = parseFloat(document.getElementById('param-contrast').value) || 1.0;
+                const brightness = parseInt(document.getElementById('param-brightness').value) || 0;
+                const palette = document.getElementById('color-palette-select').value;
+                
+                const canvas = document.getElementById('hidden-canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                canvas.width = cols;
+                canvas.height = rows;
+
+                drawSourceToCanvas(ctx, cols, rows);
+
+                if (isSplitView) {
+                    const splitCanvas = document.getElementById('split-source-canvas');
+                    const splitCtx = splitCanvas.getContext('2d');
+                    splitCanvas.width = 160;
+                    splitCanvas.height = 120;
+                    drawSourceToCanvas(splitCtx, 160, 120);
+                }
+
+                const imgData = ctx.getImageData(0, 0, cols, rows).data;
+                const dbLen = unicodeDatabase.length;
+
+                let outputHTML = '';
+                if (dbLen > 0) {
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const idx = (r * cols + c) * 4;
+                            let cr = imgData[idx];
+                            let cg = imgData[idx + 1];
+                            let cb = imgData[idx + 2];
+
+                            // Apply Contrast & Brightness directly to RGB components
+                            cr = (cr - 128) * contrast + 128 + brightness;
+                            cg = (cg - 128) * contrast + 128 + brightness;
+                            cb = (cb - 128) * contrast + 128 + brightness;
+
+                            // Calculate luminance for character mapping (clamped 0..1)
+                            let lum = Math.max(0, Math.min(1, (cr * 0.299 + cg * 0.587 + cb * 0.114) / 255));
+                            const charIdx = Math.min(dbLen - 1, Math.floor(lum * dbLen));
+                            const rawChar = unicodeDatabase[charIdx].char;
+                            const safeChar = escapeHtml(rawChar);
+
+                            const colorStyle = getCssColor(cr, cg, cb, palette);
+
+                            if (colorStyle) {
+                                outputHTML += `<span style="color:${colorStyle}">${safeChar}</span>`;
+                            } else {
+                                outputHTML += safeChar;
+                            }
+                        }
+                        outputHTML += '\n';
+                    }
+                }
+
+                document.getElementById('ascii-output').innerHTML = outputHTML;
+                document.getElementById('dimension-indicator').innerText = `(${cols} cols)`;
+            }
+
+            requestAnimationFrame(engineLoop);
+        }
+    </script>
+</body>
+</html>
