@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTF-8 BitMatrix Engine - Lab V3 (Fixed Studio Control)</title>
+    <style>
+        :root {
+            --bg-dark: #020617;
+            --panel-bg: #0f172a;
+            --border-color: #334155;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Courier New', monospace; user-select: none; }
+        body { background-color: var(--bg-dark); color: var(--text-main); width: 100vw; height: 100vh; overflow: hidden; position: relative; }
+
+        /* HEADER DOCK */
+        header { height: 32px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 8px; z-index: 1000; }
+        .dock-title { font-size: 11px; font-weight: bold; color: var(--accent-cyan); display: flex; align-items: center; gap: 8px; }
+        .dock-btns { display: flex; gap: 4px; }
+        .dock-btn { background: #1e293b; color: var(--text-main); border: 1px solid var(--border-color); font-size: 10px; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+        .dock-btn:hover { background: var(--accent-cyan); color: #000; }
+
+        /* MAIN WORKSPACE: FIXED DISPLAY */
+        #workspace { width: 100%; height: calc(100vh - 32px); position: relative; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+
+        /* ASCII VIEWPORT CANVAS */
+        #ascii-viewport-container { border: 1px solid var(--border-color); background: #000; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        #ascii-output { font-family: 'Courier New', monospace; font-size: 9px; line-height: 0.85; white-space: pre; color: #38bdf8; letter-spacing: 0px; }
+
+        /* FLOATING DRAGGABLE PANELS */
+        .pop-panel { position: absolute; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); z-index: 100; min-width: 210px; backdrop-filter: blur(4px); }
+        .pop-header { background: #1e293b; padding: 4px 6px; cursor: move; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); font-size: 10px; font-weight: bold; color: var(--accent-cyan); }
+        .pop-body { padding: 6px; display: flex; flex-direction: column; gap: 6px; font-size: 10px; }
+
+        /* ULTRA-COMPACT TIGHT CONTROLS */
+        .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.05); }
+        .ctrl-label { display: flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 10px; white-space: nowrap; }
+        .help-q { background: transparent; border: none; color: var(--accent-amber); cursor: pointer; font-size: 9px; font-weight: bold; padding: 0 2px; }
+
+        /* STEPPER NOBS & STEP BUTTONS */
+        .stepper { display: flex; align-items: center; gap: 1px; background: #020617; border: 1px solid var(--border-color); border-radius: 2px; }
+        .stepper button { background: #1e293b; color: #fff; border: none; width: 16px; height: 16px; font-size: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .stepper button:hover { background: var(--accent-cyan); color: #000; }
+        .stepper input { width: 32px; background: transparent; border: none; color: var(--accent-cyan); text-align: center; font-size: 10px; font-weight: bold; }
+
+        /* MINI TOGGLES & BUTTONS */
+        .btn-mini { background: #1e293b; color: var(--text-main); border: 1px solid var(--border-color); font-size: 9px; padding: 2px 5px; border-radius: 2px; cursor: pointer; }
+        .btn-mini.active { background: var(--accent-emerald); color: #000; font-weight: bold; }
+        .btn-mini.purple { background: var(--accent-purple); color: #fff; }
+
+        /* TOOLTIP POP-OVER */
+        #help-popover { display: none; position: fixed; background: #0f172a; border: 1px solid var(--accent-amber); color: #f8fafc; padding: 8px; border-radius: 4px; font-size: 10px; max-width: 220px; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.8); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="dock-title">
+            <span>UTF-8 LAB V3</span>
+            <span style="color: var(--text-muted); font-weight: normal;">[Pre-Formatted Studio Engine]</span>
+        </div>
+        <div class="dock-btns">
+            <button class="dock-btn" onclick="resetPanelPositions()">Reset Layout</button>
+            <button class="dock-btn" onclick="togglePanel('panel-optics')">Optics</button>
+            <button class="dock-btn" onclick="togglePanel('panel-osc')">Oscillators</button>
+            <button class="dock-btn" onclick="togglePanel('panel-media')">Media Deck</button>
+        </div>
+    </header>
+
+    <div id="workspace">
+        <!-- FIXED PRE ASCII DISPLAY -->
+        <div id="ascii-viewport-container">
+            <pre id="ascii-output"></pre>
+        </div>
+
+        <!-- PANEL 1: OPTICS & DISPLAY MATRIX (FLOATING) -->
+        <div id="panel-optics" class="pop-panel" style="top: 10px; left: 10px;">
+            <div class="pop-header" onmousedown="dragStart(event, 'panel-optics')">
+                <span>⚡ OPTICS & MATRIX</span>
+                <span style="cursor:pointer;" onclick="togglePanel('panel-optics')">✕</span>
+            </div>
+            <div class="pop-body">
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Terminal Columns (Width)">
+                        <span>⎈ COLUMNS</span>
+                        <button class="help-q" onclick="showHelp(event, 'Sets ASCII horizontal column resolution. Does not scale text linearly.')">?</button>
+                    </div>
+                    <div class="stepper">
+                        <button onclick="stepVal('cols', -4)">-</button>
+                        <input type="text" id="val-cols" value="64" readonly>
+                        <button onclick="stepVal('cols', 4)">+</button>
+                    </div>
+                </div>
+
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Contrast Modifier">
+                        <span>◐ CONTRAST</span>
+                        <button class="help-q" onclick="showHelp(event, 'Adjusts contrast curve prior to font density rasterization.')">?</button>
+                    </div>
+                    <div class="stepper">
+                        <button onclick="stepFloat('contrast', -0.1)">-</button>
+                        <input type="text" id="val-contrast" value="1.0" readonly>
+                        <button onclick="stepFloat('contrast', 0.1)">+</button>
+                    </div>
+                </div>
+
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Brightness Offset">
+                        <span>☼ BRIGHTNESS</span>
+                        <button class="help-q" onclick="showHelp(event, 'Shifts grayscale baseline luminance up or down.')">?</button>
+                    </div>
+                    <div class="stepper">
+                        <button onclick="stepVal('bright', -5)">-</button>
+                        <input type="text" id="val-bright" value="0" readonly>
+                        <button onclick="stepVal('bright', 5)">+</button>
+                    </div>
+                </div>
+
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Color Rendering Mode">
+                        <span>🎨 COLOR</span>
+                    </div>
+                    <button id="btn-color" class="btn-mini" onclick="toggleColor()">OFF</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 2: MICRO-OSCILLATORS (FLOATING) -->
+        <div id="panel-osc" class="pop-panel" style="top: 10px; right: 10px;">
+            <div class="pop-header" onmousedown="dragStart(event, 'panel-osc')">
+                <span>∿ OSCILLATORS</span>
+                <span style="cursor:pointer;" onclick="togglePanel('panel-osc')">✕</span>
+            </div>
+            <div class="pop-body">
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Contrast LFO Sweep">
+                        <span>~ CON SWEEP</span>
+                        <button class="help-q" onclick="showHelp(event, 'Applies dynamic sine wave LFO modulation to contrast.')">?</button>
+                    </div>
+                    <button id="btn-osc-con" class="btn-mini" onclick="toggleOsc('contrast')">OFF</button>
+                </div>
+
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Resolution Sweep">
+                        <span>~ RES SWEEP</span>
+                        <button class="help-q" onclick="showHelp(event, 'Modulates ASCII display column width in real time.')">?</button>
+                    </div>
+                    <button id="btn-osc-cols" class="btn-mini" onclick="toggleOsc('cols')">OFF</button>
+                </div>
+
+                <div class="ctrl-row">
+                    <div class="ctrl-label" title="Phase Stagger">
+                        <span>☵ V8 PHASE</span>
+                        <button class="help-q" onclick="showHelp(event, 'Staggers oscillator phase offsets across modulation channels.')">?</button>
+                    </div>
+                    <button id="btn-v8" class="btn-mini" onclick="toggleV8()">OFF</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 3: MEDIA DECK & INPUT (FLOATING) -->
+        <div id="panel-media" class="pop-panel" style="bottom: 10px; left: 10px;">
+            <div class="pop-header" onmousedown="dragStart(event, 'panel-media')">
+                <span>🎬 MEDIA DECK</span>
+                <span style="cursor:pointer;" onclick="togglePanel('panel-media')">✕</span>
+            </div>
+            <div class="pop-body">
+                <div style="display: flex; gap: 4px;">
+                    <button class="btn-mini purple" style="flex: 1;" onclick="document.getElementById('file-img').click()">Img Upload</button>
+                    <button class="btn-mini purple" style="flex: 1;" onclick="loadPresetGradient()">Grad Preset</button>
+                    <button class="btn-mini purple" style="flex: 1;" onclick="loadPresetNoise()">Noise Preset</button>
+                </div>
+                <input type="file" id="file-img" accept="image/*" style="display:none" onchange="handleImg(event)">
+            </div>
+        </div>
+    </div>
+
+    <!-- HELPER TOOLTIP -->
+    <div id="help-popover"></div>
+
+    <!-- OFFSCREEN CANVASES -->
+    <canvas id="canvas-src" style="display:none;"></canvas>
+    <canvas id="canvas-work" style="display:none;"></canvas>
+
+    <script>
+        let unicodeDB = [" ", "░", "▒", "▓", "█"];
+        let srcCanvas = document.getElementById('canvas-src');
+        let workCanvas = document.getElementById('canvas-work');
+        let asciiEl = document.getElementById('ascii-output');
+
+        let state = {
+            cols: 64,
+            contrast: 1.0,
+            bright: 0,
+            color: false,
+            v8: false,
+            osc: { contrast: false, cols: false }
+        };
+
+        window.onload = () => {
+            loadPresetGradient();
+            requestAnimationFrame(renderLoop);
+        };
+
+        function renderLoop(time) {
+            let cols = state.cols;
+            let contrast = state.contrast;
+
+            if(state.osc.contrast) {
+                contrast += Math.sin(time / 500) * 0.5;
+            }
+            if(state.osc.cols) {
+                let offset = Math.round(Math.sin(time / 700) * 12);
+                cols = Math.max(16, state.cols + offset);
+            }
+
+            if(srcCanvas.width > 0) {
+                let aspect = srcCanvas.height / srcCanvas.width;
+                let rows = Math.round(cols * aspect * 0.55);
+                
+                workCanvas.width = cols;
+                workCanvas.height = rows;
+                let ctx = workCanvas.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(srcCanvas, 0, 0, cols, rows);
+                
+                let imgData = ctx.getImageData(0, 0, cols, rows).data;
+                let out = "";
+
+                for(let y = 0; y < rows; y++) {
+                    for(let x = 0; x < cols; x++) {
+                        let i = (y * cols + x) * 4;
+                        let r = imgData[i], g = imgData[i+1], b = imgData[i+2];
+                        let gray = (r * 0.299 + g * 0.587 + b * 0.114);
+                        
+                        gray = ((gray - 128) * contrast) + 128 + state.bright;
+                        gray = Math.max(0, Math.min(255, gray));
+
+                        let charIdx = Math.floor((gray / 255) * (unicodeDB.length - 1));
+                        let char = unicodeDB[charIdx];
+
+                        if(state.color) {
+                            out += `<span style="color:rgb(${r},${g},${b})">${char}</span>`;
+                        } else {
+                            out += char;
+                        }
+                    }
+                    out += "\n";
+                }
+
+                if(state.color) {
+                    asciiEl.innerHTML = out;
+                } else {
+                    asciiEl.innerText = out;
+                }
+            }
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        /* TIGHT CONTROL STEPPERS */
+        function stepVal(key, delta) {
+            state[key] = Math.max(12, Math.min(120, state[key] + delta));
+            document.getElementById(`val-${key}`).value = state[key];
+        }
+
+        function stepFloat(key, delta) {
+            state[key] = Math.max(0.1, Math.min(3.0, parseFloat((state[key] + delta).toFixed(1))));
+            document.getElementById(`val-${key}`).value = state[key].toFixed(1);
+        }
+
+        function toggleColor() {
+            state.color = !state.color;
+            let btn = document.getElementById('btn-color');
+            btn.innerText = state.color ? "ON" : "OFF";
+            btn.classList.toggle('active', state.color);
+        }
+
+        function toggleOsc(key) {
+            state.osc[key] = !state.osc[key];
+            let btn = document.getElementById(`btn-osc-${key}`);
+            btn.innerText = state.osc[key] ? "ON" : "OFF";
+            btn.classList.toggle('active', state.osc[key]);
+        }
+
+        function toggleV8() {
+            state.v8 = !state.v8;
+            let btn = document.getElementById('btn-v8');
+            btn.innerText = state.v8 ? "ON" : "OFF";
+            btn.classList.toggle('active', state.v8);
+        }
+
+        /* MEDIA HANDLERS */
+        function loadPresetGradient() {
+            srcCanvas.width = 100; srcCanvas.height = 100;
+            let ctx = srcCanvas.getContext('2d');
+            let grad = ctx.createLinearGradient(0,0,100,100);
+            grad.addColorStop(0, '#000'); grad.addColorStop(1, '#fff');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,100,100);
+        }
+
+        function loadPresetNoise() {
+            srcCanvas.width = 100; srcCanvas.height = 100;
+            let ctx = srcCanvas.getContext('2d');
+            for(let i=0; i<10000; i+=4) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#fff' : '#000';
+                ctx.fillRect((i/4)%100, Math.floor((i/4)/100), 1, 1);
+            }
+        }
+
+        function handleImg(e) {
+            let file = e.target.files[0];
+            if(!file) return;
+            let reader = new FileReader();
+            reader.onload = (event) => {
+                let img = new Image();
+                img.onload = () => {
+                    srcCanvas.width = img.width; srcCanvas.height = img.height;
+                    srcCanvas.getContext('2d').drawImage(img,0,0);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        /* DRAGGABLE POP-PANEL MECHANICS */
+        let activeDrag = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        function dragStart(e, panelId) {
+            activeDrag = document.getElementById(panelId);
+            dragOffset.x = e.clientX - activeDrag.offsetLeft;
+            dragOffset.y = e.clientY - activeDrag.offsetTop;
+            document.addEventListener('mousemove', dragMove);
+            document.addEventListener('mouseup', dragEnd);
+        }
+
+        function dragMove(e) {
+            if(activeDrag) {
+                activeDrag.style.left = (e.clientX - dragOffset.x) + 'px';
+                activeDrag.style.top = (e.clientY - dragOffset.y) + 'px';
+                activeDrag.style.right = 'auto';
+                activeDrag.style.bottom = 'auto';
+            }
+        }
+
+        function dragEnd() {
+            activeDrag = null;
+            document.removeEventListener('mousemove', dragMove);
+            document.removeEventListener('mouseup', dragEnd);
+        }
+
+        function togglePanel(id) {
+            let p = document.getElementById(id);
+            p.style.display = p.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function resetPanelPositions() {
+            let p1 = document.getElementById('panel-optics');
+            p1.style.top = '10px'; p1.style.left = '10px'; p1.style.display = 'block';
+            let p2 = document.getElementById('panel-osc');
+            p2.style.top = '10px'; p2.style.left = 'auto'; p2.style.right = '10px'; p2.style.display = 'block';
+            let p3 = document.getElementById('panel-media');
+            p3.style.top = 'auto'; p3.style.bottom = '10px'; p3.style.left = '10px'; p3.style.display = 'block';
+        }
+
+        /* HELPER POPOVER */
+        function showHelp(e, txt) {
+            e.stopPropagation();
+            let pop = document.getElementById('help-popover');
+            pop.innerText = txt;
+            pop.style.left = (e.clientX + 10) + 'px';
+            pop.style.top = (e.clientY + 10) + 'px';
+            pop.style.display = 'block';
+            
+            setTimeout(() => {
+                document.addEventListener('click', hideHelp, { once: true });
+            }, 10);
+        }
+
+        function hideHelp() {
+            document.getElementById('help-popover').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

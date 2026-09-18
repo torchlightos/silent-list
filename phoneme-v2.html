@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V2 · phoneme harvest / PCM bitmask / tandem</title>
+<style>
+:root{--bg:#070907;--fg:#c8f0b0;--dim:#5d7a55;--hi:#eaff9c;--acc:#7dffd4;--warn:#ffb070;--bd:#243024;--pan:#101610}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:13px/1.35 ui-monospace,Menlo,Consolas,monospace}
+header{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--bd)}
+h1{margin:0;font-size:13px;letter-spacing:.08em}
+.chk{display:flex;align-items:center;gap:6px;color:var(--warn)}
+main{display:grid;grid-template-columns:240px 1fr 280px;height:calc(100% - 42px)}
+@media(max-width:980px){main{grid-template-columns:1fr;height:auto}}
+sec,section{display:block;border-right:1px solid var(--bd);overflow:auto;padding:8px}
+section:last-child{border-right:0}
+h2{margin:10px 0 6px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+button,select,input[type=text],input[type=number],textarea{background:#0c120c;color:var(--fg);border:1px solid var(--bd);font:inherit;padding:5px 8px}
+button{cursor:pointer}
+button:hover{border-color:var(--acc);color:var(--hi)}
+button.go{border-color:var(--acc)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0}
+label.s{color:var(--dim);font-size:11px}
+input[type=range]{width:110px}
+.word{padding:2px 6px;cursor:pointer}
+.word:hover,.word.on{background:#1a2818;color:var(--hi)}
+.ph{display:inline-block;border:1px solid var(--bd);padding:2px 6px;margin:2px;cursor:pointer}
+.ph.on{border-color:var(--acc);color:var(--hi)}
+.seq{font-size:18px;color:var(--hi);padding:8px 0;letter-spacing:.06em}
+.log{height:180px;width:100%;resize:vertical;background:#080c08;color:var(--acc);font-size:11px}
+.bits{font-size:11px;color:var(--dim);word-break:break-all}
+.bar{height:8px;background:#1a2218;margin:2px 0}
+.bar>i{display:block;height:100%;background:var(--acc);width:0}
+.twin{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{border:1px solid var(--bd);padding:8px;background:var(--pan)}
+.hit{color:var(--hi)}
+.miss{color:#866}
+.note{color:var(--dim);font-size:11px}
+canvas{width:100%;height:48px;background:#080c08;border:1px solid var(--bd)}
+</style>
+</head>
+<body>
+<header>
+  <h1>V2 HARVEST / BITMASK / TANDEM</h1>
+  <label class="chk"><input type="checkbox" id="brake"> BRAKE</label>
+  <span class="note" id="stat">idle</span>
+</header>
+<main>
+<section>
+  <h2>lexicon</h2>
+  <input type="text" id="q" placeholder="filter" style="width:100%">
+  <div id="list"></div>
+  <h2>39 base phones</h2>
+  <div id="phones"></div>
+</section>
+<section>
+  <h2>selected</h2>
+  <div class="seq" id="sel">—</div>
+  <div id="seqph"></div>
+  <div class="row">
+    <button class="go" id="say">SAY</button>
+    <button id="sayPhones">LOOP ALL PHONES</button>
+    <button id="sayWordN">SAY WORD ×8</button>
+    <button id="stop">STOP</button>
+  </div>
+  <div class="row">
+    <label class="s">rate</label><input type="range" id="rate" min="0.4" max="2.2" step="0.05" value="1">
+    <label class="s">pitch</label><input type="range" id="pitch" min="70" max="220" step="1" value="110">
+    <label class="s">gain</label><input type="range" id="gain" min="0" max="1" step="0.01" value="0.22">
+  </div>
+  <h2>audio in · pcm slice</h2>
+  <div class="row">
+    <button id="mic">MIC ON</button>
+    <button id="learn">LEARN SLICE → template</button>
+    <input type="text" id="tname" placeholder="template name" value="slice">
+  </div>
+  <canvas id="wave"></canvas>
+  <div class="bits" id="livebits">bits —</div>
+  <h2>tandem matchers</h2>
+  <div class="twin">
+    <div class="card" id="A"><b>A</b> thresh 0.28 hop 20ms<div class="bar"><i id="abar"></i></div><div id="ahit">—</div></div>
+    <div class="card" id="B"><b>B</b> thresh 0.40 hop 12ms<div class="bar"><i id="bbar"></i></div><div id="bhit">—</div></div>
+  </div>
+  <h2>data channel</h2>
+  <textarea class="log" id="log" readonly></textarea>
+  <div class="row">
+    <button id="clog">CLEAR LOG</button>
+    <button id="dlog">DOWNLOAD LOG</button>
+    <button id="dexp">EXPORT TEMPLATES</button>
+    <button id="imp">IMPORT JSON</button>
+    <input type="file" id="ifile" accept="application/json" hidden>
+  </div>
+  <p class="note">Synth is a coarse glottal+noise formant stand-in (not TMS5100 LPC yet). Harvest loop speaks each phone, captures its own output into bitmask templates. Mic PCM is windowed the same way and fuzzy-matched (Hamming on 16-bin masks + envelope). Slot for TI LPC hex is in templates.lpc. Two matchers race; BRAKE freezes oscillators and harvest.</p>
+</section>
+<section>
+  <h2>templates</h2>
+  <div id="tpls"></div>
+  <h2>oscillator / timer</h2>
+  <div class="row"><label class="s">master Hz</label><input type="range" id="mhz" min="0.2" max="20" step="0.1" value="4"><span id="mhzv">4</span></div>
+  <div class="note" id="tick">tick 0</div>
+  <h2>TI LPC slot</h2>
+  <textarea id="lpc" class="log" style="height:90px" placeholder="label: 0x45,0xAB,..."></textarea>
+  <button id="savelpc">STORE LPC AGAINST SELECTED</button>
+</section>
+</main>
+<script>
+/* --- compact lexicon: 39 phones + ~120 high-freq words --- */
+const INV = ["AA","AE","AH","AO","AW","AY","B","CH","D","DH","EH","ER","EY","F","G","HH","IH","IY","JH","K","L","M","N","NG","OW","OY","P","R","S","SH","T","TH","UH","UW","V","W","Y","Z","ZH"];
+const LEX = {
+the:["DH","AH"],of:["AH","V"],and:["AH","N","D"],to:["T","UW"],a:["AH"],in:["IH","N"],for:["F","AO","R"],is:["IH","Z"],on:["AA","N"],that:["DH","AE","T"],
+by:["B","AY"],this:["DH","IH","S"],with:["W","IH","DH"],i:["AY"],you:["Y","UW"],it:["IH","T"],not:["N","AA","T"],or:["AO","R"],be:["B","IY"],are:["AA","R"],
+from:["F","R","AH","M"],at:["AE","T"],as:["AE","Z"],your:["Y","UH","R"],all:["AO","L"],have:["HH","AE","V"],new:["N","UW"],more:["M","AO","R"],an:["AE","N"],was:["W","AA","Z"],
+we:["W","IY"],will:["W","IH","L"],home:["HH","OW","M"],can:["K","AE","N"],us:["AH","S"],about:["AH","B","AW","T"],if:["IH","F"],page:["P","EY","JH"],my:["M","AY"],has:["HH","AE","Z"],
+search:["S","ER","CH"],free:["F","R","IY"],but:["B","AH","T"],our:["AW","ER"],one:["W","AH","N"],other:["AH","DH","ER"],do:["D","UW"],no:["N","OW"],time:["T","AY","M"],they:["DH","EY"],
+he:["HH","IY"],up:["AH","P"],may:["M","EY"],what:["W","AH","T"],which:["W","IH","CH"],their:["DH","EH","R"],out:["AW","T"],use:["Y","UW","S"],any:["EH","N","IY"],there:["DH","EH","R"],
+see:["S","IY"],only:["OW","N","L","IY"],so:["S","OW"],his:["HH","IH","Z"],when:["W","EH","N"],here:["HH","IY","R"],who:["HH","UW"],also:["AO","L","S","OW"],now:["N","AW"],help:["HH","EH","L","P"],
+get:["G","EH","T"],first:["F","ER","S","T"],been:["B","IH","N"],would:["W","UH","D"],how:["HH","AW"],were:["W","ER"],me:["M","IY"],some:["S","AH","M"],these:["DH","IY","Z"],click:["K","L","IH","K"],
+its:["IH","T","S"],like:["L","AY","K"],than:["DH","AE","N"],find:["F","AY","N","D"],price:["P","R","AY","S"],date:["D","EY","T"],back:["B","AE","K"],top:["T","AA","P"],people:["P","IY","P","AH","L"],had:["HH","AE","D"],
+list:["L","IH","S","T"],name:["N","EY","M"],just:["JH","AH","S","T"],over:["OW","V","ER"],state:["S","T","EY","T"],year:["Y","IH","R"],day:["D","EY"],into:["IH","N","T","UW"],two:["T","UW"],health:["HH","EH","L","TH"],
+world:["W","ER","L","D"],next:["N","EH","K","S","T"],used:["Y","UW","Z","D"],go:["G","OW"],work:["W","ER","K"],last:["L","AE","S","T"],most:["M","OW","S","T"],music:["M","Y","UW","Z","IH","K"],buy:["B","AY"],data:["D","EY","T","AH"],
+make:["M","EY","K"],system:["S","IH","S","T","AH","M"],post:["P","OW","S","T"],her:["HH","ER"],city:["S","IH","T","IY"],add:["AE","D"],policy:["P","AA","L","AH","S","IY"],number:["N","AH","M","B","ER"],such:["S","AH","CH"],please:["P","L","IY","Z"],
+available:["AH","V","EY","L","AH","B","AH","L"],copyright:["K","AA","P","IY","R","AY","T"],support:["S","AH","P","AO","R","T"],message:["M","EH","S","AH","JH"],after:["AE","F","T","ER"],best:["B","EH","S","T"],then:["DH","EH","N"],good:["G","UH","D"],well:["W","EH","L"],where:["W","EH","R"],
+info:["IH","N","F","OW"],rights:["R","AY","T","S"],public:["P","AH","B","L","IH","K"],books:["B","UH","K","S"],high:["HH","AY"],school:["S","K","UW","L"],through:["TH","R","UW"],each:["IY","CH"],she:["SH","IY"],review:["R","IY","V","Y","UW"],
+years:["Y","IH","R","Z"],order:["AO","R","D","ER"],very:["V","EH","R","IY"],privacy:["P","R","AY","V","AH","S","IY"],book:["B","UH","K"],item:["AY","T","AH","M"],company:["K","AH","M","P","AH","N","IY"],read:["R","EH","D"],group:["G","R","UW","P"],need:["N","IY","D"],
+many:["M","EH","N","IY"],user:["Y","UW","Z","ER"],said:["S","EH","D"],does:["D","AH","Z"],set:["S","EH","T"],under:["AH","N","D","ER"],general:["JH","EH","N","ER","AH","L"],research:["R","IY","S","ER","CH"],university:["Y","UW","N","AH","V","ER","S","AH","T","IY"],mail:["M","EY","L"],
+full:["F","UH","L"],map:["M","AE","P"],reviews:["R","IY","V","Y","UW","Z"],program:["P","R","OW","G","R","AE","M"],life:["L","AY","F"],know:["N","OW"],games:["G","EY","M","Z"],way:["W","EY"],days:["D","EY","Z"],management:["M","AE","N","AH","JH","M","AH","N","T"],
+part:["P","AA","R","T"],could:["K","UH","D"],great:["G","R","EY","T"],united:["Y","UW","N","AY","T","AH","D"],hotel:["HH","OW","T","EH","L"],real:["R","IY","L"],item:["AY","T","AH","M"],center:["S","EH","N","T","ER"],store:["S","T","AO","R"],travel:["T","R","AE","V","AH","L"],
+speak:["S","P","IY","K"],spell:["S","P","EH","L"],voice:["V","OY","S"],phone:["F","OW","N"],sound:["S","AW","N","D"],word:["W","ER","D"],words:["W","ER","D","Z"]
+};
+/* formant table Hz [F1,F2,durMs,voiced 1/0,noise] */
+const FMT = {
+AA:[730,1090,140,1,0],AE:[660,1720,130,1,0],AH:[640,1190,90,1,0],AO:[570,840,140,1,0],
+AW:[570,840,180,1,0],AY:[660,1720,180,1,0],EH:[530,1840,110,1,0],ER:[490,1350,140,1,0],
+EY:[530,1840,160,1,0],IH:[390,1990,80,1,0],IY:[270,2290,140,1,0],OW:[570,840,160,1,0],
+OY:[570,840,180,1,0],UH:[440,1020,90,1,0],UW:[300,870,140,1,0],
+B:[200,800,50,0,0.4],CH:[1800,2600,90,0,0.8],D:[300,1700,50,0,0.35],DH:[400,1400,70,0,0.5],
+F:[1400,2100,90,0,0.85],G:[300,1400,50,0,0.4],HH:[1200,1800,70,0,0.7],JH:[500,2200,90,0,0.7],
+K:[800,2200,50,0,0.5],L:[400,1200,80,1,0.05],M:[250,1000,80,1,0.1],N:[250,1400,80,1,0.1],
+NG:[250,1000,100,1,0.15],P:[800,1400,50,0,0.45],R:[500,1300,80,1,0.05],S:[4000,5500,110,0,0.95],
+SH:[2200,3500,110,0,0.9],T:[800,1800,45,0,0.45],TH:[1400,2400,90,0,0.8],V:[300,1400,80,1,0.35],
+W:[300,700,70,1,0.05],Y:[300,2200,70,1,0.05],Z:[4000,5000,90,1,0.6],ZH:[2200,3000,90,1,0.55]
+};
+
+const S = {
+  brake:false, ac:null, master:null, speaking:false, micOn:false,
+  templates: JSON.parse(localStorage.getItem('v2tpl')||'{}'),
+  selWord:null, selPhone:null, tick:0,
+  liveMask:0, liveEnv:0,
+  capBuf:[]
+};
+
+function emit(obj){
+  const line = JSON.stringify({t:Date.now(), ...obj});
+  const el = document.getElementById('log');
+  el.value += line + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+function saveTpl(){ localStorage.setItem('v2tpl', JSON.stringify(S.templates)); drawTpl(); }
+
+function ensureAC(){
+  if (S.ac) return S.ac;
+  const ac = new (window.AudioContext||window.webkitAudioContext)();
+  const master = ac.createGain();
+  master.gain.value = +document.getElementById('gain').value;
+  master.connect(ac.destination);
+  S.ac = ac; S.master = master;
+  return ac;
+}
+
+function noiseBuf(ac, sec){
+  const n = Math.floor(ac.sampleRate*sec);
+  const b = ac.createBuffer(1,n,ac.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i=0;i<n;i++) d[i] = Math.random()*2-1;
+  return b;
+}
+
+function playPhone(ph, when, rate, pitch){
+  const ac = ensureAC();
+  const spec = FMT[ph] || FMT.AH;
+  const [f1,f2,dur0,voiced,nz] = spec;
+  const dur = (dur0/1000)/rate;
+  const t0 = when;
+  const t1 = when+dur;
+  const g = ac.createGain();
+  g.connect(S.master);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(voiced?0.6:0.35, t0+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t1);
+
+  if (voiced){
+    const o = ac.createOscillator();
+    o.type='sawtooth';
+    o.frequency.setValueAtTime(pitch, t0);
+    const fA = ac.createBiquadFilter(); fA.type='bandpass'; fA.frequency.value=f1; fA.Q.value=8;
+    const fB = ac.createBiquadFilter(); fB.type='bandpass'; fB.frequency.value=f2; fB.Q.value=6;
+    o.connect(fA); o.connect(fB); fA.connect(g); fB.connect(g);
+    o.start(t0); o.stop(t1+0.02);
+  }
+  if (nz>0.05){
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuf(ac, dur+0.05);
+    const bp = ac.createBiquadFilter();
+    bp.type='bandpass'; bp.frequency.value=Math.max(f1,f2); bp.Q.value=1.2;
+    const ng = ac.createGain(); ng.gain.value = nz;
+    src.connect(bp); bp.connect(ng); ng.connect(g);
+    src.start(t0); src.stop(t1+0.02);
+  }
+  return t1;
+}
+
+function phonesOf(){
+  if (S.selPhone) return [S.selPhone];
+  if (S.selWord && LEX[S.selWord]) return LEX[S.selWord];
+  return [];
+}
+
+async function saySeq(phones, tag){
+  if (S.brake) { emit({ch:'sys', ev:'brake'}); return; }
+  const ac = ensureAC();
+  if (ac.state==='suspended') await ac.resume();
+  const rate = +document.getElementById('rate').value;
+  const pitch = +document.getElementById('pitch').value;
+  S.speaking = true;
+  document.getElementById('stat').textContent = 'say '+phones.join(' ');
+  let t = ac.currentTime + 0.03;
+  const start = t;
+  for (const p of phones) t = playPhone(p, t, rate, pitch) + 0.025/rate;
+  emit({ch:'out', ev:'say', tag, phones, dur: +(t-start).toFixed(3)});
+  const wait = (t - ac.currentTime + 0.05)*1000;
+  await new Promise(r=>setTimeout(r, Math.max(50,wait)));
+  S.speaking = false;
+}
+
+/* --- bitmask from time-domain + crude bands --- */
+function maskFromPCM(samples, sr, thresh){
+  // 16 bands via goertzel-ish energy
+  const N = samples.length;
+  let rms=0, zc=0;
+  for (let i=0;i<N;i++){
+    rms += samples[i]*samples[i];
+    if (i && (samples[i-1]>=0)!==(samples[i]>=0)) zc++;
+  }
+  rms = Math.sqrt(rms/Math.max(1,N));
+  const bands = new Array(16).fill(0);
+  const targets = [120,200,300,450,650,900,1200,1600,2000,2500,3100,3800,4600,5500,6500,8000];
+  for (let b=0;b<16;b++){
+    const f = targets[b];
+    const w = 2*Math.PI*f/sr;
+    let s0=0,s1=0,s2=0;
+    const coeff = 2*Math.cos(w);
+    for (let i=0;i<N;i++){
+      s0 = samples[i] + coeff*s1 - s2;
+      s2=s1; s1=s0;
+    }
+    bands[b] = s1*s1 + s2*s2 - coeff*s1*s2;
+  }
+  const mx = Math.max(...bands, 1e-12);
+  let bits=0;
+  for (let b=0;b<16;b++){
+    if (bands[b]/mx >= thresh && rms>0.004) bits |= (1<<b);
+  }
+  return {bits, rms, zcr: zc/N, bands};
+}
+
+function bitsStr(bits){
+  return bits.toString(2).padStart(16,'0');
+}
+function hamming(a,b){
+  let x=a^b, n=0; while(x){ n+=x&1; x>>=1; } return n;
+}
+
+function fuzzyMatch(obs, which){
+  const keys = Object.keys(S.templates);
+  if (!keys.length) return {name:'—', score:0, ham:16};
+  let best=null;
+  for (const k of keys){
+    const t = S.templates[k];
+    const ham = hamming(obs.bits, t.bits|0);
+    const env = 1 - Math.min(1, Math.abs((obs.rms||0)-(t.rms||0))*8);
+    const z = 1 - Math.min(1, Math.abs((obs.zcr||0)-(t.zcr||0))*4);
+    const score = (16-ham)/16 * 0.7 + env*0.2 + z*0.1;
+    if (!best || score>best.score) best = {name:k, score, ham};
+  }
+  return best;
+}
+
+/* harvest: render phone offline, mask it */
+async function harvestPhone(ph, reps){
+  const ac = ensureAC();
+  const rate = +document.getElementById('rate').value;
+  const pitch = +document.getElementById('pitch').value;
+  const spec = FMT[ph]||FMT.AH;
+  const dur = ((spec[2]/1000)/rate + 0.08) * reps + 0.05;
+  const off = new OfflineAudioContext(1, Math.ceil(ac.sampleRate*dur), ac.sampleRate);
+  // replay into offline: simple copy of play using off
+  const master = off.createGain(); master.gain.value = 0.5; master.connect(off.destination);
+  let t=0.02;
+  const oldAC=S.ac, oldM=S.master;
+  S.ac=off; S.master=master;
+  for (let i=0;i<reps;i++){
+    t = playPhone(ph, t, rate, pitch) + 0.04;
+  }
+  S.ac=oldAC; S.master=oldM;
+  const buf = await off.startRendering();
+  const pcm = buf.getChannelData(0);
+  // take mid window
+  const sr = buf.sampleRate;
+  const mid = Math.floor(pcm.length*0.35);
+  const win = Math.min(pcm.length-mid, Math.floor(sr*0.08));
+  const slice = pcm.slice(mid, mid+win);
+  const m = maskFromPCM(slice, sr, 0.22);
+  S.templates['ph:'+ph] = {kind:'phone', phone:ph, bits:m.bits, rms:m.rms, zcr:m.zcr, reps, lpc:null};
+  saveTpl();
+  emit({ch:'harvest', ev:'phone', phone:ph, bits:bitsStr(m.bits), rms:+m.rms.toFixed(4)});
+}
+
+async function loopAllPhones(){
+  if (S.brake) return;
+  document.getElementById('stat').textContent='harvest phones';
+  for (const ph of INV){
+    if (S.brake) break;
+    S.selPhone = ph; markPh();
+    await saySeq([ph,ph,ph],'harvest-live');
+    await harvestPhone(ph, 6);
+  }
+  document.getElementById('stat').textContent='harvest done';
+}
+
+function drawTpl(){
+  const el=document.getElementById('tpls');
+  el.innerHTML='';
+  Object.keys(S.templates).sort().forEach(k=>{
+    const t=S.templates[k];
+    const d=document.createElement('div');
+    d.className='word';
+    d.textContent = k+'  '+bitsStr(t.bits|0)+(t.lpc?'  LPC':'');
+    d.onclick=()=>{ delete S.templates[k]; saveTpl(); emit({ch:'tpl',ev:'del',k}); };
+    el.appendChild(d);
+  });
+}
+
+function renderList(f){
+  const el=document.getElementById('list'); el.innerHTML='';
+  Object.keys(LEX).filter(w=>!f||w.includes(f)).forEach(w=>{
+    const d=document.createElement('div'); d.className='word'+(S.selWord===w?' on':'');
+    d.textContent=w; d.onclick=()=>{ S.selWord=w; S.selPhone=null; showSel(); renderList(f); };
+    el.appendChild(d);
+  });
+}
+function renderPhones(){
+  const el=document.getElementById('phones'); el.innerHTML='';
+  INV.forEach(p=>{
+    const s=document.createElement('span'); s.className='ph'+(S.selPhone===p?' on':'');
+    s.textContent=p; s.onclick=()=>{ S.selPhone=p; S.selWord=null; showSel(); markPh(); };
+    el.appendChild(s);
+  });
+}
+function markPh(){ document.querySelectorAll('#phones .ph').forEach(e=>e.classList.toggle('on', e.textContent===S.selPhone)); }
+function showSel(){
+  const ph = phonesOf();
+  document.getElementById('sel').textContent = S.selWord || S.selPhone || '—';
+  document.getElementById('seqph').innerHTML = ph.map(p=>'<span class="ph">'+p+'</span>').join('');
+}
+
+/* mic */
+let proc=null, micSrc=null, analyser=null;
+async function micOn(){
+  const ac=ensureAC();
+  if (ac.state==='suspended') await ac.resume();
+  const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  micSrc = ac.createMediaStreamSource(stream);
+  analyser = ac.createAnalyser(); analyser.fftSize=2048;
+  micSrc.connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  const cv = document.getElementById('wave');
+  const ctx = cv.getContext('2d');
+  S.micOn=true;
+  document.getElementById('mic').textContent='MIC OFF';
+  emit({ch:'in', ev:'mic-on'});
+  function tick(){
+    if (!S.micOn) return;
+    analyser.getFloatTimeDomainData(buf);
+    // draw
+    cv.width=cv.clientWidth; cv.height=48;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.strokeStyle='#7dffd4'; ctx.beginPath();
+    for (let i=0;i<buf.length;i+=8){
+      const x=i/buf.length*cv.width;
+      const y=24+buf[i]*24;
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    const slice = buf.subarray(0, 1024);
+    const a = maskFromPCM(slice, ac.sampleRate, 0.28);
+    const b = maskFromPCM(slice, ac.sampleRate, 0.40);
+    S.liveMask=a.bits; S.liveEnv=a.rms; S.capBuf = Array.from(slice);
+    document.getElementById('livebits').textContent = 'A '+bitsStr(a.bits)+' rms '+a.rms.toFixed(3)+'  B '+bitsStr(b.bits);
+    if (!S.brake){
+      const ma = fuzzyMatch(a,'A');
+      const mb = fuzzyMatch(b,'B');
+      document.getElementById('abar').style.width = (ma.score*100)+'%';
+      document.getElementById('bbar').style.width = (mb.score*100)+'%';
+      document.getElementById('ahit').textContent = ma.name+'  '+(ma.score*100|0)+'% ham '+ma.ham;
+      document.getElementById('bhit').textContent = mb.name+'  '+(mb.score*100|0)+'% ham '+mb.ham;
+      if (ma.score>0.78 || mb.score>0.78){
+        emit({ch:'match', A:ma, B:mb, bitsA:bitsStr(a.bits), bitsB:bitsStr(b.bits)});
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+function micOff(){
+  S.micOn=false;
+  document.getElementById('mic').textContent='MIC ON';
+  emit({ch:'in', ev:'mic-off'});
+}
+
+function learnSlice(){
+  if (!S.capBuf.length){ emit({ch:'sys',ev:'no-slice'}); return; }
+  const ac=ensureAC();
+  const m = maskFromPCM(Float32Array.from(S.capBuf), ac.sampleRate, 0.28);
+  const name = document.getElementById('tname').value || ('t'+Date.now());
+  S.templates[name] = {kind:'slice', bits:m.bits, rms:m.rms, zcr:m.zcr, word:S.selWord, phone:S.selPhone, lpc:null};
+  saveTpl();
+  emit({ch:'tpl', ev:'learn', name, bits:bitsStr(m.bits)});
+}
+
+/* master timer */
+setInterval(()=>{
+  if (S.brake) return;
+  S.tick++;
+  document.getElementById('tick').textContent = 'tick '+S.tick;
+  document.getElementById('mhzv').textContent = document.getElementById('mhz').value;
+}, 250);
+
+document.getElementById('brake').onchange = e=>{ S.brake=e.target.checked; emit({ch:'sys',ev:S.brake?'brake-on':'brake-off'}); };
+document.getElementById('say').onclick = ()=>saySeq(phonesOf(), 'manual');
+document.getElementById('sayPhones').onclick = loopAllPhones;
+document.getElementById('sayWordN').onclick = async ()=>{
+  const ph=phonesOf();
+  for (let i=0;i<8 && !S.brake;i++) await saySeq(ph, 'x8');
+  if (S.selPhone) await harvestPhone(S.selPhone,8);
+  else if (S.selWord){
+    // harvest concatenated word from last live? store name
+    S.templates['w:'+S.selWord] = S.templates['w:'+S.selWord] || {kind:'word', word:S.selWord, bits:S.liveMask, rms:S.liveEnv, zcr:0, phones:ph};
+    saveTpl();
+  }
+};
+document.getElementById('stop').onclick = ()=>{ S.brake=true; document.getElementById('brake').checked=true; };
+document.getElementById('mic').onclick = ()=> S.micOn?micOff():micOn();
+document.getElementById('learn').onclick = learnSlice;
+document.getElementById('clog').onclick = ()=> document.getElementById('log').value='';
+document.getElementById('dlog').onclick = ()=>{
+  const blob=new Blob([document.getElementById('log').value],{type:'text/plain'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='v2-data-channel.txt'; a.click();
+};
+document.getElementById('dexp').onclick = ()=>{
+  const blob=new Blob([JSON.stringify(S.templates,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='v2-templates.json'; a.click();
+};
+document.getElementById('imp').onclick = ()=>document.getElementById('ifile').click();
+document.getElementById('ifile').onchange = ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  f.text().then(t=>{ Object.assign(S.templates, JSON.parse(t)); saveTpl(); emit({ch:'tpl',ev:'import'}); });
+};
+document.getElementById('savelpc').onclick = ()=>{
+  const raw=document.getElementById('lpc').value.trim();
+  const key = S.selWord? 'w:'+S.selWord : S.selPhone? 'ph:'+S.selPhone : 'lpc:'+Date.now();
+  S.templates[key] = S.templates[key] || {kind:'lpc', bits:0, rms:0, zcr:0};
+  S.templates[key].lpc = raw;
+  saveTpl();
+  emit({ch:'lpc', ev:'store', key});
+};
+document.getElementById('q').oninput = e=>renderList(e.target.value.toLowerCase());
+document.getElementById('gain').oninput = e=>{ if(S.master) S.master.gain.value=+e.target.value; };
+
+renderList(''); renderPhones(); showSel(); drawTpl();
+emit({ch:'sys', ev:'boot', phones:INV.length, words:Object.keys(LEX).length});
+</script>
+</body>
+</html>
